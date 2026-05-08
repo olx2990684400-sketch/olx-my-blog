@@ -121,22 +121,25 @@ export function applyThemeToDocument(theme: LIGHT_DARK_MODE) {
 		return;
 	}
 
-	// 批量 DOM 操作，减少重绘
-	if (needsThemeChange) {
-		// 添加过渡保护类（但会导致大量重绘，所以使用更轻量的方式）
-		// document.documentElement.classList.add("is-theme-transitioning");
-
-		// 直接切换主题，利用 CSS 变量的特性让浏览器优化过渡
-		if (targetIsDark) {
-			document.documentElement.classList.add("dark");
-		} else {
-			document.documentElement.classList.remove("dark");
+	// 实际执行主题切换的函数
+	const doApply = () => {
+		if (needsThemeChange) {
+			if (targetIsDark) {
+				document.documentElement.classList.add("dark");
+			} else {
+				document.documentElement.classList.remove("dark");
+			}
 		}
-	}
+		if (needsCodeThemeUpdate) {
+			document.documentElement.setAttribute("data-theme", expectedTheme);
+		}
+	};
 
-	// Set the theme for Expressive Code based on current mode
-	if (needsCodeThemeUpdate) {
-		document.documentElement.setAttribute("data-theme", expectedTheme);
+	// 使用 View Transitions API 实现平滑的交叉淡化
+	if (needsThemeChange && "startViewTransition" in document) {
+		(document as any).startViewTransition(doApply);
+	} else {
+		doApply();
 	}
 }
 
@@ -190,18 +193,24 @@ export function setupSystemThemeListener() {
 			return;
 		}
 
-		// 直接应用系统主题，不使用过渡保护类以避免大量重绘
-		if (isDark) {
-			document.documentElement.classList.add("dark");
-		} else {
-			document.documentElement.classList.remove("dark");
-		}
+		// 应用系统主题切换
+		const applySystemTheme = () => {
+			if (isDark) {
+				document.documentElement.classList.add("dark");
+			} else {
+				document.documentElement.classList.remove("dark");
+			}
+			const expressiveTheme = isDark
+				? expressiveCodeConfig.darkTheme
+				: expressiveCodeConfig.lightTheme;
+			document.documentElement.setAttribute("data-theme", expressiveTheme);
+		};
 
-		// Set the theme for Expressive Code
-		const expressiveTheme = isDark
-			? expressiveCodeConfig.darkTheme
-			: expressiveCodeConfig.lightTheme;
-		document.documentElement.setAttribute("data-theme", expressiveTheme);
+		if ("startViewTransition" in document) {
+			(document as any).startViewTransition(applySystemTheme);
+		} else {
+			applySystemTheme();
+		}
 
 		// 触发自定义事件通知其他组件（仅在真正切换时触发）
 		window.dispatchEvent(new CustomEvent("theme-change"));
