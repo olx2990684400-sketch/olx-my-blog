@@ -7,20 +7,20 @@ const SITE_LANG = "zh_CN";
 
 export const siteConfig: SiteConfig = {
 	// 站点标题
-	title: "MmzMing的博客",
+	title: "Fqzlr的博客",
 
 	// 站点副标题
-	subtitle: "MmzMing",
+	subtitle: "Fqzlr",
 
 	// 站点 URL
-	site_url: "https://tblog.mmzhiku.xyz",
+	site_url: "https://fqzlr.com/",
 
 	// 站点描述
-	description: "测试站点描述",
+	description: "fqzlr的个人技术博客，专注NAS分享、AI实践、学习笔记与技术总结，与个人成长分享。",
 
 	// 站点关键词
 	keywords: [
-		"MmzMing",
+		"fqzlr",
 		"JAVA",
 		"AI",
 		"Astro",
@@ -37,7 +37,7 @@ export const siteConfig: SiteConfig = {
 		// 是否对访问者隐藏主题色选择器
 		fixed: false,
 		// 默认模式："light" 亮色，"dark" 暗色
-		defaultMode: "dark",
+		defaultMode: "light",
 	},
 
 	// 页面整体宽度（单位：rem）
@@ -115,11 +115,11 @@ export const siteConfig: SiteConfig = {
 		// 4. 网络图片: { type: "url", value: "https://example.com/logo.png", alt: "Logo" }
 		logo: {
 			type: "image",
-			value: "assets/images/logo.png",
+			value: "assets/images/avatar.gif",
 			alt: "logo",
 		},
 		// 导航栏标题
-		title: "MmzMing的博客",
+		title: "Fqzlr的博客",
 		// 全宽导航栏，导航栏是否占满屏幕宽度
 		widthFull: false,
 		// 导航菜单对齐方式，left：左对齐，center：居中
@@ -131,7 +131,7 @@ export const siteConfig: SiteConfig = {
 	},
 
 	// 站点开始日期，用于统计运行天数
-	siteStartDate: "2026-05-07",
+	siteStartDate: "2026-04-12",
 
 	// 站点时区（IANA 时区字符串），用于格式化bangumi、rss里的构建日期时间等等..
 	// 示例："Asia/Shanghai", "UTC", 如果为空，则按照构建服务器的时区进行时区转换
@@ -221,9 +221,9 @@ export const siteConfig: SiteConfig = {
 		microsoftClarityId: "",
 		// Umami 统计配置
 		umamiAnalytics: {
-			websiteId: "5907656e-d254-4c9e-ad73-5ce40bf184bb",
-			shareId: "uAfsjwbIKgVPjxtc",
-			scriptUrl: "https://stats.mmzhiku.xyz/script.js",
+			websiteId: "4f4d87b0-bf0f-403a-a7c1-71962537673a",
+			shareId: "kHCJG2ZUL1r6q5Js",
+			scriptUrl: "https://umami.fqzlr.com/script.js",
 			// 是否追踪出站链接
 			trackOutboundLinks: true,
 			// 是否收集浏览器性能指标
@@ -263,7 +263,7 @@ export const siteConfig: SiteConfig = {
 	heatmap: {
 		github: {
 			enabled: true,
-			username: "MmzMing", // 填写 GitHub 用户名后启用
+			username: "fqzlr", // 填写 GitHub 用户名后启用
 		},
 	},
 
@@ -294,8 +294,8 @@ export const siteConfig: SiteConfig = {
 	lang: SITE_LANG,
 
 	// 备案号配置，留空则不显示
-	beian: "粤ICP备2026073665号-1",
+	beian: "萌ICP备20268200号",
 
 	// 公安网备号配置，留空则不显示
-	policeBeian: "粤公网安备44060602003342号",
+	policeBeian: "萌ICP备20268200号",
 };

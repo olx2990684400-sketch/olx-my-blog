@@ -209,11 +209,12 @@ export enum LinkPreset {
 	Categories = 11,
 	Tags = 12,
 	PostList = 13,
-	Feibichi = 14,
+	Fhome = 14,
 	ContactMe = 15,
 	QQGroup = 16,
 	NavPosts = 17,
 	NavMy = 18,
+	Fnote = 19,
 }
 
 export type NavBarLink = {

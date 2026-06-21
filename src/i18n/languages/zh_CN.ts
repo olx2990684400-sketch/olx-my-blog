@@ -349,7 +349,8 @@ export const zh_CN: Translation = {
 
 	// 日历页面
 	[Key.calendar]: "日历",
-	[Key.feibichi]: "菲比啾比",
+	[Key.Fhome]: "番茄主页",
+	[Key.Fnote]: "番茄笔记",
 	[Key.contactMe]: "联系我",
 	[Key.qqGroup]: "QQ群",
 	[Key.navPosts]: "文章",

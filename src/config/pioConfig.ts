@@ -50,7 +50,7 @@ export const spineModelConfig: SpineModelConfig = {
 		],
 		// 点击时随机显示的文字消息
 		clickMessages: [
-			"你好呀！我是哈基墩~",
+			"你好呀！我是番茄主理人~",
 			"今天也要加油哦！✨",
 			"想要一起去看星空吗？🌟",
 			"记得要好好休息呢~",
@@ -143,7 +143,7 @@ export const live2dModelConfig: Live2DModelConfig = {
 	// 作者信息
 	author: {
 		name: "木果阿木果",
-		url: "https://www.bilibili.com/video/BV1Ts9eBkEXX",
+		url: "https://space.bilibili.com/2017273493",
 	},
 
 	// 响应式配置

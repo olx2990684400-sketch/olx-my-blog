@@ -6,25 +6,25 @@ export const profileConfig: ProfileConfig = {
 	// 1. public 目录（以 "/" 开头，不优化）："/assets/images/avatar.webp"
 	// 2. src 目录（不以 "/" 开头，自动优化但会增加构建时间，推荐）："assets/images/avatar.webp"
 	// 3. 远程 URL："https://example.com/avatar.jpg"
-	avatar: "assets/images/avatar.webp",
+	avatar: "assets/images/shangban.png",
 
 	// 下班时间头像（为空则始终使用上方 avatar）
-	avatarOffWork: "assets/images/avatar2.webp",
+	avatarOffWork: "assets/images/xiaban.gif",
 
 	// 名字
-	name: "MmzMing",
+	name: "Fqzlr",
 
 	// 首页展示名字（留空则使用 name）
-	displayName: "MmzMing",
+	displayName: "Fqzlrの博客",
 
 	// 名字右侧徽章文字（如 QQ 号）
-	nameBadge: "B站：Mmz明崽",
+	nameBadge: "B站：番茄煮理人",
 
 	// 职业/身份标签
-	occupation: "[(伪)全栈工程师[啥都干工程师] / 技术博主]",
+	occupation: "[啥都不会/ 无技术博主]",
 
 	// 个人签名（支持多条，会循环打字+删除效果）
-	bio: ["且视他人之疑目如盏盏鬼火，大胆地去走你的夜路"],
+	bio: ["躬身入局，心为主理，行有尺度，自持本心."],
 
 	// 链接配置
 	// 已经预装的图标集：fa7-brands，fa7-regular，fa7-solid，material-symbols，simple-icons
@@ -34,33 +34,39 @@ export const profileConfig: ProfileConfig = {
 	// showName: true 时显示图标和名称，false 时只显示图标
 	links: [
 		{
-			name: "qq",
+			name: "qq群",
 			icon: "fa7-brands:qq",
-			url: "https://qm.qq.com/q/2R07cjGTZ0",
+			url: "https://qm.qq.com/q/wrmF4FI9pu",
 			showName: false,
 		},
 		{
 			name: "B站",
 			icon: "fa7-brands:bilibili",
-			url: "https://space.bilibili.com/15446538",
+			url: "https://space.bilibili.com/2017273493",
 			showName: false,
 		},
 		{
 			name: "GitHub",
 			icon: "fa7-brands:github",
-			url: "https://github.com/MmzMing",
+			url: "https://github.com/fqzlr",
 			showName: false,
 		},
 		{
 			name: "Email",
 			icon: "fa7-solid:envelope",
-			url: "mailto:784774835@qq.com",
+			url: "mailto:fqzlr@outlook.com",
 			showName: false,
 		},
 		{
 			name: "RSS",
 			icon: "fa7-solid:rss",
 			url: "/rss/",
+			showName: false,
+		},
+		{
+			name: "my home",
+			url: "https://home.fqzlr.com",
+			icon: "fa7-solid:house-chimney",
 			showName: false,
 		},
 	],

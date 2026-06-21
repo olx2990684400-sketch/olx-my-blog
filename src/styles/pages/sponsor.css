@@ -343,3 +343,110 @@ body.wallpaper-transparent .usage-info-box {
 		font-size: 0.9375rem;
 	}
 }
+/* ============================================
+   爱发电跳转面板（完全匹配截图居中布局 + 液态玻璃按钮）
+   ============================================ */
+.afd-card {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	max-width: 400px;
+	min-height: 320px;
+	gap: 1.25rem;
+}
+
+/* Logo + 标题一行 */
+.afd-card-logo-row {
+	display: flex;
+	align-items: center;
+	gap: 0.875rem;
+}
+.afd-card-icon {
+	font-size: 3rem;
+	color: var(--neutral-900, #111827);
+}
+:root.dark .afd-card-icon {
+	color: var(--neutral-100, #f3f4f6);
+}
+
+.afd-card-title {
+	font-size: 3.25rem;
+	font-weight: 700;
+	color: var(--neutral-900, #111827);
+	line-height: 1;
+	margin: 0;
+}
+:root.dark .afd-card-title {
+	color: var(--neutral-100, #f3f4f6);
+}
+
+/* 中间描述小字 */
+.afd-card-subtext {
+	font-size: 1.25rem;
+	color: var(--neutral-500, #6b7280);
+	margin: 0;
+}
+:root.dark .afd-card-subtext {
+	color: var(--neutral-400, #9ca3af);
+}
+
+/* 液态玻璃磨砂按钮，替换原有纯色青色 */
+.afd-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 1.25rem 3.5rem;
+	/* 液态玻璃半透底色 + 模糊磨砂 */
+	background: rgba(255, 255, 255, 0.6);
+	backdrop-filter: blur(10px);
+	-webkit-backdrop-filter: blur(10px);
+	/* 和页面卡片统一黑白边框 */
+	border: 2px solid #1a1a1a;
+	color: var(--neutral-900, #111827);
+	font-size: 1.75rem;
+	font-weight: 500;
+	border-radius: 1.5rem;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+/* 深色模式玻璃适配 */
+:root.dark .afd-btn {
+	background: rgba(22, 22, 26, 0.55);
+	border-color: #e5e5e5;
+	color: var(--neutral-100, #f3f4f6);
+}
+/* hover：边框切换主题主色，轻微提亮玻璃底色 */
+.afd-btn:hover {
+	border-color: var(--primary, #4f46e5);
+	background: rgba(255, 255, 255, 0.8);
+}
+:root.dark .afd-btn:hover {
+	background: rgba(22, 22, 26, 0.75);
+}
+/* 点击压缩反馈，全站统一交互 */
+.afd-btn:active {
+	transform: scale(0.96);
+}
+
+/* 移动端适配，和页面统一640px断点 */
+@media (max-width: 640px) {
+	.afd-card {
+		max-width: 280px;
+		min-height: 260px;
+		gap: 1rem;
+	}
+	.afd-card-icon {
+		font-size: 2.25rem;
+	}
+	.afd-card-title {
+		font-size: 2.25rem;
+	}
+	.afd-card-subtext {
+		font-size: 1rem;
+	}
+	.afd-btn {
+		padding: 1rem 2.25rem;
+		font-size: 1.375rem;
+	}
+}

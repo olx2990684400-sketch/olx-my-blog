@@ -22,10 +22,18 @@ export const sponsorConfig: SponsorConfig = {
 	// 赞助方式列表
 	methods: [
 		{
-			name: "菲比啾比支付",
-			icon: "material-symbols:chat-bubble",
+			name: "爱发电",
+			icon: "simple-icons:afdian",
+			qrCode: "",
+			link: "https://ifdian.net/a/fqzlr",
+			description: "通过 爱发电 进行打赏",
+			enabled: true,
+		},
+		{
+			name: "微信支付",
+			icon: "fa7-brands:weixin",
 			// 收款码图片路径（需要放在 public 目录下）
-			qrCode: "/assets/images/wechat-pay.webp",
+			qrCode: "/assets/images/wechat.png",
 			link: "",
 			description: "",
 			enabled: true,
@@ -34,25 +42,32 @@ export const sponsorConfig: SponsorConfig = {
 			name: "支付宝支付",
 			icon: "fa7-brands:alipay",
 			// 收款码图片路径（需要放在 public 目录下）/assets/images/alipay.webp
-			qrCode: "",
+			qrCode: "/assets/images/alipay.png",
 			link: "",
 			description: "",
 			enabled: true,
 		},
+
 	],
 
 	// 赞助者列表（可选）
 	sponsors: [
 		// 示例：已实名赞助者
 		{
-			name: "高赞首富",
-			amount: "¥648",
-			date: "2026-01-01",
+			name: "番茄主理人",
+			avatar:
+				"https://q1.qlogo.cn/g?b=qq&nk=20447289&s=640",
+			amount: "¥50",
+			date: "2025-10-01",
 		},
+
+		// 示例：匿名打赏者
 		{
-			name: "非凡",
-			amount: "¥999",
-			date: "2026-01-01",
+			name: "214556787",
+			avatar:
+				"https://weavatar.com/avatar/d252655d40d6874417a720bad0a6c5f77f8f6a1fd2f882f8f338402dc37e4190?s=640",
+			amount: "¥1",
+			date: "2025-10-01",
 		},
 		// 示例：匿名赞助者
 		{

@@ -84,29 +84,49 @@ const showSponsorsList = sponsorConfig.showSponsorsList !== false;
           <!-- 第四层：二维码图片 -->
           <div class="sponsor-qr-card__content">
             {enabledMethods.map((method, index) => (
-              <div
-                class:list={[
-                  "sponsor-qr-card__panel",
-                  { "hidden": index !== 0 }
-                ]}
-                data-sponsor-panel={index}
-              >
-                {method.qrCode ? (
-                  <div class="sponsor-qr-card__image-wrapper">
-                    <img
-                      src={url(method.qrCode)}
-                      alt={`${method.name} ${i18n(I18nKey.scanToSponsor)}`}
-                      class="sponsor-qr-card__image"
-                      loading="lazy"
-                    />
-                  </div>
-                ) : (
-                  <div class="sponsor-qr-card__empty">
-                    <Icon name="material-symbols:qr-code-scanner" class="text-[3rem] mb-2 opacity-40" />
-                    <span class="sponsor-qr-card__empty-text">暂不开通</span>
-                  </div>
+          <div
+            class:list={[
+              "sponsor-qr-card__panel",
+              { "hidden": index !== 0 }
+            ]}
+            data-sponsor-panel={index}
+          >
+            <!-- 判断：爱发电且存在跳转链接，渲染图1按钮样式 -->
+            {method.name === "爱发电" && method.link ? (
+            <div class="afd-card">
+              <div class="afd-card-logo-row">
+                {method.icon && (
+                  <Icon name={method.icon} class="afd-card-icon" />
                 )}
+                <h3 class="afd-card-title">爱发电</h3>
               </div>
+              <p class="afd-card-subtext">通过 爱发电 进行打赏</p>
+              <a
+                href={method.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="afd-btn"
+              >
+                前往打赏
+                <Icon name="fa7-solid:arrow-up-right-from-square" />
+              </a>
+            </div>
+            ) : method.qrCode ? (
+            <div class="sponsor-qr-card__image-wrapper">
+              <img
+                src={url(method.qrCode)}
+                alt={`${method.name} ${i18n(I18nKey.scanToSponsor)}`}
+                class="sponsor-qr-card__image"
+                loading="lazy"
+              />
+            </div>
+            ) : (
+            <div class="sponsor-qr-card__empty">
+              <Icon name="material-symbols:qr-code-scanner" class="text-[3rem] mb-2 opacity-40" />
+              <span class="sponsor-qr-card__empty-text">暂不开通</span>
+            </div>
+            )}
+          </div>
             ))}
           </div>
         </div>

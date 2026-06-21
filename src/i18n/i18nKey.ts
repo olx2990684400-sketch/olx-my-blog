@@ -363,7 +363,8 @@ enum I18nKey {
 	calendarNearestBirthday = "calendarNearestBirthday",
 	calendarNearestSchedule = "calendarNearestSchedule",
 
-	feibichi = "feibichi",
+	Fhome = "Fhome",
+	Fnote = "Fnote",
 	contactMe = "contactMe",
 	qqGroup = "qqGroup",
 	navPosts = "navPosts",
