@@ -15,10 +15,7 @@
     "lint": "biome check --write ./src",
     "preinstall": "npx only-allow pnpm",
     "icons": "node scripts/generate-icons.js",
-    "build-index": "node scripts/build-vectorize-index.js",
-    "docs:dev": "vitepress dev docs",
-    "docs:build": "vitepress build docs",
-    "docs:preview": "vitepress preview docs"
+    "build-index": "node scripts/build-vectorize-index.js"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.8",
@@ -107,8 +104,7 @@
     "playwright": "^1.52.0",
     "postcss-import": "^16.1.1",
     "postcss-nesting": "^13.0.2",
-    "tailwindcss": "^4.2.4",
-    "vitepress": "^1.6.4"
+    "tailwindcss": "^4.2.4"
   },
   "packageManager": "pnpm@9.14.4"
 }
