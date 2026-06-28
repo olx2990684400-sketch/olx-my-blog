@@ -3,6 +3,7 @@ import Icon from "@components/common/Icon.astro";
 import PageTitle from "@/components/common/PageTitle.astro";
 import AlbumCard from "@/components/pages/gallery/AlbumCard.astro";
 import NetworkAlbum from "@/components/pages/gallery/NetworkAlbum.svelte";
+import FileCodeEditor from "@/components/edit/FileCodeEditor.svelte";
 import { galleryConfig, siteConfig } from "@/config";
 import I18nKey from "@/i18n/i18nKey";
 import { i18n } from "@/i18n/translation";
@@ -41,9 +42,19 @@ const tabs = [
 <MainGridLayout title={title} description={description}>
   <div class="flex w-full rounded-(--radius-large) overflow-hidden relative min-h-32">
     <div class="card-base z-10 px-9 py-6 relative w-full">
-      <div class="mb-4">
-        <PageTitle title={title} eyebrow="Gallery" variant="stacked" />
+      <div class="mb-4 flex justify-between items-start gap-4 flex-wrap">
+        <div class="flex-1 min-w-0">
+          <PageTitle title={title} eyebrow="Gallery" variant="stacked" />
+        </div>
+        <div class="page-header-toolbar-slot flex-shrink-0"></div>
+      </div>
 
+      <div data-no-swup>
+        <FileCodeEditor
+          client:only
+          filePath="src/config/galleryConfig.ts"
+          pageName="相册页面"
+        />
       </div>
 
       <div class="border-b border-(--line-divider) mb-3 relative">
@@ -278,4 +289,15 @@ const tabs = [
       document.addEventListener("astro:page-load", initFilterIndicator);
     })();
   </script>
+
+  <style>
+    @media (max-width: 768px) {
+      :has(> .page-header-toolbar-slot) {
+        flex-direction: column;
+      }
+      .page-header-toolbar-slot {
+        width: 100%;
+      }
+    }
+  </style>
 </MainGridLayout>

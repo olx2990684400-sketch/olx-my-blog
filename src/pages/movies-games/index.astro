@@ -4,6 +4,7 @@ import Comment from "@components/comment/index.astro";
 import { Icon } from "astro-icon/components";
 import ClientPagination from "@/components/common/ClientPagination.astro";
 import MovieGameCard from "@/components/pages/movies-games/MovieGameCard.astro";
+import BangumiEditor from "@/components/edit/BangumiEditor.svelte";
 import { siteConfig } from "@/config";
 import { externalBangumiConfig } from "@/config/externalBangumiConfig";
 import I18nKey from "@/i18n/i18nKey";
@@ -219,24 +220,36 @@ const activeTab = sections[0]?.tabKey || "all";
 	<div class="mg-page-wrapper flex w-full overflow-hidden relative min-h-32">
 		<div data-pagefind-body class="card-base z-10 px-6 pt-8 pb-8 relative w-full">
 			<!-- Page header -->
-			<header class="mg-header relative w-full mb-8">
-				<div class="flex items-center gap-3 mb-4">
-					<div class="mg-icon flex items-center justify-center w-12 h-12 rounded-2xl bg-[var(--primary)]/10 dark:bg-[var(--primary)]/15 border border-[var(--primary)]/20 shadow-sm">
-						<Icon name="material-symbols:movie-outline-rounded" class="text-[1.4rem] text-[var(--primary)]" />
+			<header class="mg-header relative w-full mb-8 flex justify-between items-start gap-4 flex-wrap">
+				<div class="flex-1 min-w-0">
+					<div class="flex items-center gap-3 mb-4">
+						<div class="mg-icon flex items-center justify-center w-12 h-12 rounded-2xl bg-[var(--primary)]/10 dark:bg-[var(--primary)]/15 border border-[var(--primary)]/20 shadow-sm">
+							<Icon name="material-symbols:movie-outline-rounded" class="text-[1.4rem] text-[var(--primary)]" />
+						</div>
+						<div>
+							<h1 data-pagefind-meta="title" data-pagefind-weight="10" class="">
+								{i18n(I18nKey.moviesGamesTitle)}
+							</h1>
+						</div>
 					</div>
-					<div>
-						<h1 data-pagefind-meta="title" data-pagefind-weight="10" class="">
-							{i18n(I18nKey.moviesGamesTitle)}
-						</h1>
-					</div>
+					<p class="text-sm text-[var(--content-meta)] leading-relaxed pl-[3.5rem]">
+						{i18n(I18nKey.moviesGamesSubtitle)}
+					</p>
+					<p class="text-xs text-[var(--content-meta)] opacity-60 mt-1.5 pl-[3.5rem]">
+						{i18n(I18nKey.bangumiLastUpdated)} {buildTime}
+					</p>
 				</div>
-				<p class="text-sm text-[var(--content-meta)] leading-relaxed pl-[3.5rem]">
-					{i18n(I18nKey.moviesGamesSubtitle)}
-				</p>
-				<p class="text-xs text-[var(--content-meta)] opacity-60 mt-1.5 pl-[3.5rem]">
-					{i18n(I18nKey.bangumiLastUpdated)} {buildTime}
-				</p>
+				<div class="page-header-toolbar-slot flex-shrink-0"></div>
 			</header>
+
+			<div data-no-swup>
+				<BangumiEditor
+					client:only
+					defaultCategory="all"
+					skipDomCollect={true}
+					customPageName="影视游戏"
+				/>
+			</div>
 
 			{mgItems.length > 0 ? (
 				<>
@@ -793,6 +806,15 @@ const activeTab = sections[0]?.tabKey || "all";
 	}
 	.scrollbar-hide::-webkit-scrollbar {
 		display: none;
+	}
+
+	@media (max-width: 768px) {
+		:has(> .page-header-toolbar-slot) {
+			flex-direction: column;
+		}
+		.page-header-toolbar-slot {
+			width: 100%;
+		}
 	}
 
 	@media (max-width: 640px) {

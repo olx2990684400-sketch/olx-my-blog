@@ -3,6 +3,7 @@ import { getCollection } from "astro:content";
 import Comment from "@components/comment/index.astro";
 import { Icon } from "astro-icon/components";
 import Bookshelf from "@/components/pages/books/Bookshelf.astro";
+import BangumiEditor from "@/components/edit/BangumiEditor.svelte";
 import { siteConfig } from "@/config";
 import I18nKey from "@/i18n/i18nKey";
 import { i18n } from "@/i18n/translation";
@@ -51,40 +52,52 @@ const wishCount = bookItems.filter((b) => b.status === 1).length;
 	<div class="books-page-wrapper flex w-full overflow-hidden relative min-h-32">
 		<div data-pagefind-body class="card-base z-10 px-6 pt-8 pb-8 relative w-full">
 					<!-- Page header -->
-		<header class="books-header relative w-full mb-6">
-			<div class="flex items-center gap-3 mb-3">
-				<div class="w-12 h-12 rounded-2xl bg-black dark:bg-white flex items-center justify-center">
-					<Icon name="material-symbols:auto-stories" class="text-[1.4rem] text-white dark:text-black" />
+		<header class="books-header relative w-full mb-6 flex justify-between items-start gap-4 flex-wrap">
+			<div class="flex-1 min-w-0">
+				<div class="flex items-center gap-3 mb-3">
+					<div class="w-12 h-12 rounded-2xl bg-black dark:bg-white flex items-center justify-center">
+						<Icon name="material-symbols:auto-stories" class="text-[1.4rem] text-white dark:text-black" />
+					</div>
+					<div>
+						<h1 data-pagefind-meta="title" data-pagefind-weight="10" class="text-3xl font-bold text-neutral-900 dark:text-neutral-100">
+							{i18n(I18nKey.booksTitle)}
+						</h1>
+					</div>
 				</div>
-				<div>
-					<h1 data-pagefind-meta="title" data-pagefind-weight="10" class="text-3xl font-bold text-neutral-900 dark:text-neutral-100">
-						{i18n(I18nKey.booksTitle)}
-					</h1>
-				</div>
-			</div>
-			<p class="text-sm text-neutral-500 dark:text-neutral-400 leading-relaxed">
-				{i18n(I18nKey.booksSubtitle)}
-			</p>
-			<div class="flex items-center gap-4 mt-2">
-				<p class="text-xs text-neutral-400 dark:text-neutral-500">
-					{i18n(I18nKey.bangumiLastUpdated)} {buildTime}
+				<p class="text-sm text-neutral-500 dark:text-neutral-400 leading-relaxed">
+					{i18n(I18nKey.booksSubtitle)}
 				</p>
-				<div class="flex items-center gap-3 text-xs text-neutral-500 dark:text-neutral-400">
-					<span class="flex items-center gap-1">
-						<span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
-						{i18n(I18nKey.bookshelfRead)} {readCount}
-					</span>
-					<span class="flex items-center gap-1">
-						<span class="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>
-						{i18n(I18nKey.bookshelfReading)} {readingCount}
-					</span>
-					<span class="flex items-center gap-1">
-						<span class="w-2 h-2 rounded-full bg-sky-500 inline-block"></span>
-						{i18n(I18nKey.bookshelfWantRead)} {wishCount}
-					</span>
+				<div class="flex items-center gap-4 mt-2">
+					<p class="text-xs text-neutral-400 dark:text-neutral-500">
+						{i18n(I18nKey.bangumiLastUpdated)} {buildTime}
+					</p>
+					<div class="flex items-center gap-3 text-xs text-neutral-500 dark:text-neutral-400">
+						<span class="flex items-center gap-1">
+							<span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+							{i18n(I18nKey.bookshelfRead)} {readCount}
+						</span>
+						<span class="flex items-center gap-1">
+							<span class="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>
+							{i18n(I18nKey.bookshelfReading)} {readingCount}
+						</span>
+						<span class="flex items-center gap-1">
+							<span class="w-2 h-2 rounded-full bg-sky-500 inline-block"></span>
+							{i18n(I18nKey.bookshelfWantRead)} {wishCount}
+						</span>
+					</div>
 				</div>
 			</div>
+			<div class="page-header-toolbar-slot flex-shrink-0"></div>
 		</header>
+
+		<div data-no-swup>
+			<BangumiEditor
+				client:only
+				defaultCategory="book"
+				skipDomCollect={true}
+				customPageName="书架"
+			/>
+		</div>
 
 			{bookItems.length > 0 ? (
 				<Bookshelf books={bookItems} />
@@ -119,6 +132,15 @@ const wishCount = bookItems.filter((b) => b.status === 1).length;
 	@keyframes fadeSlideIn {
 		from { opacity: 0; transform: translateY(8px); }
 		to { opacity: 1; transform: translateY(0); }
+	}
+
+	@media (max-width: 768px) {
+		:has(> .page-header-toolbar-slot) {
+			flex-direction: column;
+		}
+		.page-header-toolbar-slot {
+			width: 100%;
+		}
 	}
 
 	@media (max-width: 640px) {

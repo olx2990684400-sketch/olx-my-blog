@@ -29,6 +29,16 @@
 		_local?: boolean;
 	}
 
+	let {
+		defaultCategory = "all",
+		skipDomCollect = false,
+		customPageName = "番剧",
+	}: {
+		defaultCategory?: string;
+		skipDomCollect?: boolean;
+		customPageName?: string;
+	} = $props();
+
 	let editMode = $state(false);
 	let saving = $state(false);
 	let hasChanges = $state(false);
@@ -36,13 +46,14 @@
 	let originalItems = $state<BangumiItem[]>([]);
 	let editingIndex = $state(-1);
 	let gistLoaded = $state(false);
-	let activeTab = $state("all");
+	let activeTab = $state(defaultCategory);
 
 	const categoryMap: Record<string, string> = {
 		anime: "动漫",
 		book: "书籍",
 		game: "游戏",
 		music: "音乐",
+		real: "影视",
 	};
 
 	const categoryList = [
@@ -50,6 +61,7 @@
 		{ id: "book", name: "书籍" },
 		{ id: "game", name: "游戏" },
 		{ id: "music", name: "音乐" },
+		{ id: "real", name: "影视" },
 	];
 
 	const tabs = [
@@ -75,7 +87,9 @@
 
 	onMount(() => {
 		ensureIconify();
-		collectFromDOM();
+		if (!skipDomCollect) {
+			collectFromDOM();
+		}
 		loadGistData();
 	});
 
@@ -190,6 +204,7 @@
 
 	// 非编辑模式：将外部条目注入到 SSR section 中
 	function renderExternalItems() {
+		if (skipDomCollect) return;
 		for (const cat of Object.keys(categoryMap)) {
 			const section = document.querySelector(
 				`[data-section="${cat}"]`,
@@ -258,6 +273,7 @@
 	}
 
 	function hideSSRContent() {
+		if (skipDomCollect) return;
 		// 隐藏 SSR 的 TabNav 和所有 section
 		const tabsWrapper = document.querySelector(".bangumi-tabs-wrapper");
 		if (tabsWrapper) (tabsWrapper as HTMLElement).style.display = "none";
@@ -267,6 +283,7 @@
 	}
 
 	function showSSRContent() {
+		if (skipDomCollect) return;
 		const tabsWrapper = document.querySelector(".bangumi-tabs-wrapper");
 		if (tabsWrapper) (tabsWrapper as HTMLElement).style.display = "";
 		document.querySelectorAll<HTMLElement>(".bangumi-section").forEach((s) => {
@@ -429,7 +446,7 @@
 <!-- 编辑工具栏 -->
 <div class="bangumi-edit-toolbar">
 	<EditToolbar
-		pageName="番剧"
+		pageName={customPageName}
 		mountTo=".page-header-toolbar-slot"
 		{saving}
 		{hasChanges}

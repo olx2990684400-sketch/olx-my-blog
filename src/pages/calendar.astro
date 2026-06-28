@@ -2,6 +2,7 @@
 import CalendarGrid from "@components/pages/calendar/CalendarGrid.svelte";
 import EventDetailPanel from "@components/pages/calendar/EventDetailPanel.svelte";
 import EventOverview from "@components/pages/calendar/EventOverview.svelte";
+import FileCodeEditor from "@/components/edit/FileCodeEditor.svelte";
 import PageTitle from "@/components/common/PageTitle.astro";
 import { calendarConfig, siteConfig } from "@/config";
 import I18nKey from "@/i18n/i18nKey";
@@ -58,9 +59,20 @@ const detailProps = { holidays, posts, birthdays, schedules, years, showPosts };
 <MainGridLayout title={title} description={description}>
 	<div class="calendar-page">
 		<div class="calendar-page__shell">
-			<header class="calendar-page__header">
-				<PageTitle title={title} eyebrow="Calendar" variant="stacked" />
+			<header class="calendar-page__header flex justify-between items-start gap-4 flex-wrap">
+				<div class="flex-1 min-w-0">
+					<PageTitle title={title} eyebrow="Calendar" variant="stacked" />
+				</div>
+				<div class="page-header-toolbar-slot flex-shrink-0"></div>
 			</header>
+
+			<div data-no-swup>
+				<FileCodeEditor
+					client:only
+					filePath="src/config/calendarConfig.ts"
+					pageName="日历页面"
+				/>
+			</div>
 
 			<aside class="calendar-page__rail calendar-page__rail--left" aria-label={i18n(I18nKey.calendarUpcoming)}>
 				<EventOverview client:load {...overviewProps} />
@@ -76,3 +88,14 @@ const detailProps = { holidays, posts, birthdays, schedules, years, showPosts };
 		</div>
 	</div>
 </MainGridLayout>
+
+<style>
+	@media (max-width: 768px) {
+		:has(> .page-header-toolbar-slot) {
+			flex-direction: column;
+		}
+		.page-header-toolbar-slot {
+			width: 100%;
+		}
+	}
+</style>

@@ -1,6 +1,7 @@
 ---
 import Icon from "@components/common/Icon.astro";
 import PageTitle from "@/components/common/PageTitle.astro";
+import FileCodeEditor from "@/components/edit/FileCodeEditor.svelte";
 import { siteConfig, sponsorConfig } from "@/config";
 import I18nKey from "@/i18n/i18nKey";
 import { i18n } from "@/i18n/translation";
@@ -24,24 +25,35 @@ const showSponsorsList = sponsorConfig.showSponsorsList !== false;
   <div class="flex w-full rounded-(--radius-large) overflow-hidden relative">
     <div class="card-base z-10 px-9 py-6 relative w-full">
       <!-- 页面标题和描述 -->
-      <div class="mb-8">
-        <PageTitle title={title} eyebrow="Sponsor" variant="stacked" />
-        {description && (
-          <p class="text-base text-neutral-600 dark:text-neutral-400 leading-relaxed mb-4 mt-3">
-            {description}
-          </p>
-        )}
-        {sponsorConfig.usage && (
-          <div class="mb-8 p-4 rounded-lg bg-(--primary)/8 dark:bg-(--btn-regular-bg) border border-(--primary)/30 dark:border-none backdrop-blur-xs shadow-xs usage-info-box">
-            <div class="flex items-start gap-2">
-              <Icon name="material-symbols:info-outline" class="text-(--primary) text-lg shrink-0 mt-0.5" />
-              <p class="text-sm text-neutral-700 dark:text-neutral-200 leading-relaxed">
-                <span class="font-semibold text-(--primary)"></span>
-                {sponsorConfig.usage}
-              </p>
+      <div class="mb-8 flex justify-between items-start gap-4 flex-wrap">
+        <div class="flex-1 min-w-0">
+          <PageTitle title={title} eyebrow="Sponsor" variant="stacked" />
+          {description && (
+            <p class="text-base text-neutral-600 dark:text-neutral-400 leading-relaxed mb-4 mt-3">
+              {description}
+            </p>
+          )}
+          {sponsorConfig.usage && (
+            <div class="mb-8 p-4 rounded-lg bg-(--primary)/8 dark:bg-(--btn-regular-bg) border border-(--primary)/30 dark:border-none backdrop-blur-xs shadow-xs usage-info-box">
+              <div class="flex items-start gap-2">
+                <Icon name="material-symbols:info-outline" class="text-(--primary) text-lg shrink-0 mt-0.5" />
+                <p class="text-sm text-neutral-700 dark:text-neutral-200 leading-relaxed">
+                  <span class="font-semibold text-(--primary)"></span>
+                  {sponsorConfig.usage}
+                </p>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
+        <div class="page-header-toolbar-slot flex-shrink-0"></div>
+      </div>
+
+      <div data-no-swup>
+        <FileCodeEditor
+          client:only
+          filePath="src/config/sponsorConfig.ts"
+          pageName="赞助页面"
+        />
       </div>
 
       <!-- 赞助方式 -->
@@ -269,4 +281,15 @@ const showSponsorsList = sponsorConfig.showSponsorsList !== false;
       document.addEventListener("astro:page-load", initSponsorTabs);
     })();
   </script>
+
+  <style>
+    @media (max-width: 768px) {
+      :has(> .page-header-toolbar-slot) {
+        flex-direction: column;
+      }
+      .page-header-toolbar-slot {
+        width: 100%;
+      }
+    }
+  </style>
 </MainGridLayout>
