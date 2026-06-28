@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, tick } from "svelte";
 	import EditToast from "./EditToast.svelte";
+	import { marked } from "marked";
 	import {
 		getStoredToken,
 		setStoredToken,
@@ -41,6 +42,7 @@
 	let showTokenModal = $state(false);
 	let tokenInput = $state("");
 	let validatingToken = $state(false);
+	let saveSuccess = $state(false);
 
 	// Refs
 	let mdFileInput: HTMLInputElement | undefined;
@@ -59,6 +61,17 @@
 	let wordCount = $derived(content.length);
 
 	let today = $derived(new Date().toISOString().slice(0, 10));
+
+	let articleUrl = $derived.by(() => {
+		if (editMode && savePath) {
+			const pathParts = savePath.replace(/^src\/content\//, "").split("/");
+			if (pathParts[0] === "posts") {
+				pathParts.shift();
+			}
+			return `/posts/${pathParts.join("/")}/`;
+		}
+		return `/posts/blog/${slug}/`;
+	});
 
 	// ============ Frontmatter Generation ============
 	function generateFrontmatter(): string {
@@ -466,6 +479,8 @@
 			if (ok) {
 				showToast(editMode ? "文章已更新！" : "文章已发布！", "success");
 				editMode = true;
+				saveSuccess = true;
+				setTimeout(() => (saveSuccess = false), 5000);
 				// Reload to get new SHA
 				const result = await getRepoFile(filePath, repoConfig);
 				if (result) {
@@ -736,36 +751,18 @@
 		}
 	}
 
-	// ============ Preview (simple markdown rendering) ============
+	// ============ Preview (full markdown rendering with marked) ============
 	function renderMarkdown(md: string): string {
 		if (!md) return "";
-		let html = md;
-		// Escape HTML first
-		html = html
-			.replace(/&/g, "&amp;")
-			.replace(/</g, "&lt;")
-			.replace(/>/g, "&gt;");
-		// Headers
-		html = html.replace(/^######\s+(.+)$/gm, "<h6>$1</h6>");
-		html = html.replace(/^#####\s+(.+)$/gm, "<h5>$1</h5>");
-		html = html.replace(/^####\s+(.+)$/gm, "<h4>$1</h4>");
-		html = html.replace(/^###\s+(.+)$/gm, "<h3>$1</h3>");
-		html = html.replace(/^##\s+(.+)$/gm, "<h2>$1</h2>");
-		html = html.replace(/^#\s+(.+)$/gm, "<h1>$1</h1>");
-		// Bold & italic
-		html = html.replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>");
-		html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-		html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
-		// Code
-		html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
-		// Links
-		html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-		// Images
-		html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" loading="lazy" />');
-		// Line breaks
-		html = html.replace(/\n\n/g, "</p><p>");
-		html = html.replace(/\n/g, "<br/>");
-		return `<p>${html}</p>`;
+		try {
+			return marked.parse(md, {
+				gfm: true,
+				breaks: true,
+			}) as string;
+		} catch (e) {
+			console.error("Markdown parse error:", e);
+			return `<p>${md}</p>`;
+		}
 	}
 
 	// ============ Tab key support ============
@@ -806,18 +803,21 @@
 
 <EditToast />
 
-<!-- 顶部浮动工具栏 -->
+<!-- 顶部工具栏 -->
 <div class="write-toolbar">
 	<div class="toolbar-left">
-		<a href="/" class="toolbar-btn toolbar-back" title="返回首页" data-no-swup>
+		<a href="/list/" class="toolbar-btn toolbar-back" title="返回文章列表" data-no-swup>
 			<iconify-icon icon="material-symbols:arrow-back-rounded" class="text-lg"></iconify-icon>
-			<span class="btn-text">返回</span>
+			<span class="btn-text">返回列表</span>
 		</a>
 	</div>
-	<div class="toolbar-center">
-		<span class="toolbar-title">{editMode ? "编辑文章" : "写文章"}</span>
-	</div>
 	<div class="toolbar-right">
+		{#if saveSuccess && hasToken && editMode}
+			<a href={articleUrl} class="toolbar-btn toolbar-view" target="_blank" title="在新窗口预览文章">
+				<iconify-icon icon="material-symbols:open-in-new-rounded" class="text-lg"></iconify-icon>
+				<span class="btn-text">查看文章</span>
+			</a>
+		{/if}
 		<button class="toolbar-btn" onclick={handleImportMd} title="导入Markdown文件">
 			<iconify-icon icon="material-symbols:upload-file-rounded" class="text-lg"></iconify-icon>
 			<span class="btn-text">导入MD</span>
@@ -836,16 +836,22 @@
 		</button>
 		<button
 			class="toolbar-btn toolbar-publish"
-			onclick={handlePublish}
+			onclick={() => {
+				if (!hasToken) {
+					handleImportKey();
+				} else {
+					handlePublish();
+				}
+			}}
 			disabled={saving || loading}
-			title={hasToken ? "发布文章" : "导入密钥后发布"}
+			title={hasToken ? (editMode ? "保存文章" : "发布文章") : "导入密钥"}
 		>
 			{#if saving}
 				<iconify-icon icon="material-symbols:progress-activity-rounded" class="text-lg animate-spin"></iconify-icon>
-				<span class="btn-text">发布中...</span>
+				<span class="btn-text">{editMode ? "保存中..." : "发布中..."}</span>
 			{:else}
-				<iconify-icon icon={hasToken ? "material-symbols:send-rounded" : "material-symbols:key-rounded"} class="text-lg"></iconify-icon>
-				<span class="btn-text">{hasToken ? "发布" : "导入密钥"}</span>
+				<iconify-icon icon={hasToken ? (editMode ? "material-symbols:save-rounded" : "material-symbols:send-rounded") : "material-symbols:key-rounded"} class="text-lg"></iconify-icon>
+				<span class="btn-text">{hasToken ? (editMode ? "保存" : "发布") : "导入密钥"}</span>
 			{/if}
 		</button>
 
@@ -1070,12 +1076,6 @@
 					<span class="status-dot" class:ok={hasToken}></span>
 					<span>{hasToken ? "已连接GitHub" : "未导入密钥"}</span>
 				</div>
-				{#if !hasToken}
-					<button class="sidebar-btn" onclick={handleImportKey}>
-						<iconify-icon icon="material-symbols:key-rounded" class="text-sm"></iconify-icon>
-						导入密钥
-					</button>
-				{/if}
 			</div>
 		</div>
 	</div>
@@ -1133,29 +1133,34 @@
 
 <style>
 	/* ===== 基础布局 ===== */
-	:global(body) {
-		overflow: hidden;
+	:global(.write-editor-wrapper) {
+		--theme-hue: var(--editor-theme-hue, 165);
+		--bg-color: var(--card-bg, #ffffff);
+		--bg-secondary: var(--bg-secondary, #f3f4f6);
+		--text-color: var(--text-color, #1a1a2e);
+		--text-secondary: var(--text-secondary, #6b7280);
+		--border: var(--border, #e5e7eb);
 	}
 
 	.write-toolbar {
-		position: fixed;
-		top: 0;
-		left: 0;
-		right: 0;
-		z-index: 100;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 10px 20px;
-		background: rgba(255, 255, 255, 0.85);
-		backdrop-filter: blur(16px);
-		-webkit-backdrop-filter: blur(16px);
-		border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-		height: 56px;
+		padding: 12px 24px;
+		background: var(--bg-color, white);
+		border-top: 1px solid var(--border, rgba(0, 0, 0, 0.06));
+		border-bottom: 1px solid var(--border, rgba(0, 0, 0, 0.06));
+		min-height: 56px;
 		box-sizing: border-box;
+		position: sticky;
+		top: 0;
+		z-index: 10;
+		border-radius: 0;
+		margin: 0;
 	}
 	:global(.dark) .write-toolbar {
-		background: rgba(20, 20, 30, 0.85);
+		background: var(--card-bg, #141420);
+		border-top-color: rgba(255, 255, 255, 0.08);
 		border-bottom-color: rgba(255, 255, 255, 0.08);
 	}
 
@@ -1164,19 +1169,6 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-	}
-
-	.toolbar-center {
-		position: absolute;
-		left: 50%;
-		transform: translateX(-50%);
-		font-size: 15px;
-		font-weight: 600;
-		color: var(--text-color, #1a1a2e);
-		pointer-events: none;
-	}
-	:global(.dark) .toolbar-center {
-		color: #f0f0f0;
 	}
 
 	.toolbar-title {
@@ -1238,11 +1230,27 @@
 		transform: none;
 	}
 
+	.toolbar-view {
+		background: #22c55e;
+		color: white !important;
+		font-weight: 600;
+		box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+		animation: pulseSuccess 1s ease-in-out infinite alternate;
+	}
+	.toolbar-view:hover {
+		background: #16a34a !important;
+		transform: translateY(-1px);
+		box-shadow: 0 4px 16px rgba(34, 197, 94, 0.4);
+	}
+	@keyframes pulseSuccess {
+		from { box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3); }
+		to { box-shadow: 0 2px 16px rgba(34, 197, 94, 0.6); }
+	}
+
 	/* ===== 主体容器 ===== */
 	.write-container {
 		display: flex;
-		height: calc(100vh - 56px);
-		margin-top: 56px;
+		min-height: 500px;
 	}
 
 	/* ===== 左侧编辑面板 ===== */
@@ -1251,12 +1259,13 @@
 		display: flex;
 		flex-direction: column;
 		min-width: 0;
-		border-right: 1px solid rgba(0, 0, 0, 0.06);
-		background: var(--bg-color, #fafafa);
+		min-height: 500px;
+		border-right: 1px solid var(--border, rgba(0, 0, 0, 0.06));
+		background: var(--bg-color, white);
 	}
 	:global(.dark) .editor-panel {
 		border-right-color: rgba(255, 255, 255, 0.08);
-		background: #0f0f1a;
+		background: var(--card-bg, #141420);
 	}
 
 	.title-input {
@@ -1346,6 +1355,7 @@
 	.content-textarea {
 		flex: 1;
 		width: 100%;
+		min-height: 300px;
 		padding: 24px 40px;
 		border: none;
 		background: transparent;
@@ -1353,7 +1363,7 @@
 		line-height: 1.8;
 		color: var(--text-color, #1f2937);
 		outline: none;
-		resize: none;
+		resize: vertical;
 		font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", "SF Mono", Consolas, "Courier New", monospace;
 		box-sizing: border-box;
 		tab-size: 2;
@@ -1443,6 +1453,92 @@
 		max-width: 100%;
 		border-radius: 8px;
 		margin: 12px 0;
+	}
+
+	.preview-panel :global(p) {
+		margin: 1em 0;
+	}
+
+	.preview-panel :global(ul),
+	.preview-panel :global(ol) {
+		margin: 1em 0;
+		padding-left: 2em;
+	}
+
+	.preview-panel :global(li) {
+		margin: 0.3em 0;
+	}
+
+	.preview-panel :global(blockquote) {
+		margin: 1em 0;
+		padding: 0.5em 1em;
+		border-left: 4px solid hsl(var(--theme-hue, 165), 70%, 50%);
+		background: hsla(var(--theme-hue, 165), 70%, 50%, 0.05);
+		border-radius: 0 8px 8px 0;
+		color: var(--text-secondary, #6b7280);
+	}
+	:global(.dark) .preview-panel :global(blockquote) {
+		background: hsla(var(--theme-hue, 165), 70%, 50%, 0.1);
+	}
+
+	.preview-panel :global(table) {
+		width: 100%;
+		border-collapse: collapse;
+		margin: 1em 0;
+		font-size: 0.95em;
+	}
+
+	.preview-panel :global(th),
+	.preview-panel :global(td) {
+		padding: 10px 14px;
+		border: 1px solid var(--border, #e5e7eb);
+		text-align: left;
+	}
+	:global(.dark) .preview-panel :global(th),
+	:global(.dark) .preview-panel :global(td) {
+		border-color: #374151;
+	}
+
+	.preview-panel :global(th) {
+		background: var(--bg-secondary, #f9fafb);
+		font-weight: 600;
+	}
+	:global(.dark) .preview-panel :global(th) {
+		background: #1f2937;
+	}
+
+	.preview-panel :global(tr:nth-child(even)) {
+		background: rgba(0, 0, 0, 0.02);
+	}
+	:global(.dark) .preview-panel :global(tr:nth-child(even)) {
+		background: rgba(255, 255, 255, 0.02);
+	}
+
+	.preview-panel :global(pre) {
+		margin: 1em 0;
+		padding: 16px 20px;
+		background: #1e1e2e;
+		border-radius: 8px;
+		overflow-x: auto;
+		font-family: "JetBrains Mono", Consolas, monospace;
+		font-size: 0.9em;
+		line-height: 1.6;
+	}
+
+	.preview-panel :global(pre code) {
+		padding: 0;
+		background: transparent;
+		color: #e0e0e0;
+		font-size: inherit;
+	}
+
+	.preview-panel :global(hr) {
+		margin: 2em 0;
+		border: none;
+		border-top: 1px solid var(--border, #e5e7eb);
+	}
+	:global(.dark) .preview-panel :global(hr) {
+		border-top-color: #374151;
 	}
 
 	/* ===== 右侧边栏 ===== */
@@ -1683,7 +1779,8 @@
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		height: 100vh;
+		min-height: 50vh;
+		padding: 80px 20px;
 		gap: 16px;
 		color: var(--text-secondary, #6b7280);
 		font-size: 14px;
@@ -1875,8 +1972,7 @@
 	@media (max-width: 768px) {
 		.write-container {
 			flex-direction: column;
-			height: auto;
-			min-height: calc(100vh - 56px);
+			min-height: 50vh;
 		}
 		.editor-panel {
 			border-right: none;
