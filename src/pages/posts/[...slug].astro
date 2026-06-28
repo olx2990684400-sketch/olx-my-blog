@@ -46,12 +46,12 @@ const { Content, headings, remarkPluginFrontmatter } = await render(entry);
 const postSlug = removeFileExtension(entry.id);
 
 // 获取文章原始markdown内容用于编辑
-const postFiles = import.meta.glob("/src/content/posts/**/*.{md,mdx}", { query: "?raw", import: "default" });
+const postFiles = import.meta.glob("../../content/posts/**/*.{md,mdx}", { query: "?raw", import: "default" });
 let postRawContent = "";
 let postExt = ".md";
 const possiblePaths = [
-	{ path: `/src/content/posts/${postSlug}.md`, ext: ".md" },
-	{ path: `/src/content/posts/${postSlug}.mdx`, ext: ".mdx" },
+	{ path: `../../content/posts/${postSlug}.md`, ext: ".md" },
+	{ path: `../../content/posts/${postSlug}.mdx`, ext: ".mdx" },
 ];
 for (const p of possiblePaths) {
 	if (postFiles[p.path]) {
@@ -272,6 +272,7 @@ const relatedPosts = await getRelatedPosts(entry, 5);
             title="编辑文章"
             data-no-swup
             data-edit-post
+            data-edit-data={JSON.stringify(editData)}
           >
             <Icon name="material-symbols:edit-rounded" class="text-base" />
             <span class="hidden sm:inline">编辑</span>
@@ -467,16 +468,25 @@ const relatedPosts = await getRelatedPosts(entry, 5);
 
 <script is:inline>
   (function() {
-    const editData = {JSON.stringify(editData)};
-    const editBtn = document.querySelector('[data-edit-post]');
-    if (editBtn) {
-      editBtn.addEventListener('click', function() {
+    function setupEditBtn() {
+      var editBtn = document.querySelector('[data-edit-post]');
+      if (!editBtn) return;
+      function storeData() {
         try {
-          sessionStorage.setItem('write-editor-article', JSON.stringify(editData));
+          var dataStr = editBtn.getAttribute('data-edit-data');
+          if (dataStr) {
+            sessionStorage.setItem('write-editor-article', dataStr);
+          }
         } catch(err) {
-          console.warn('Failed to store article data for editing:', err);
+          console.warn('Failed to store article data:', err);
         }
-      });
+      }
+      editBtn.addEventListener('mousedown', storeData);
+      editBtn.addEventListener('touchstart', storeData);
+      editBtn.addEventListener('click', storeData);
     }
+    setupEditBtn();
+    document.addEventListener('swup:contentReplaced', setupEditBtn);
+    document.addEventListener('astro:page-load', setupEditBtn);
   })();
 </script>
