@@ -188,10 +188,10 @@
 	};
 
 	const PARENT_LABELS: Record<NavParent, { label: string; icon: string; color: string }> = {
-		top: { label: "顶级导航", icon: "material-symbols:top-panel-open", color: "#10b981" },
-		posts: { label: "文章下拉", icon: "material-symbols:article", color: "#3b82f6" },
-		contact: { label: "联系我下拉", icon: "material-symbols:mail", color: "#f59e0b" },
-		my: { label: "我的下拉", icon: "material-symbols:person", color: "#8b5cf6" },
+		top: { label: "导航栏", icon: "material-symbols:top-panel-open", color: "#10b981" },
+		posts: { label: "文章", icon: "material-symbols:article", color: "#3b82f6" },
+		contact: { label: "联系我", icon: "material-symbols:mail", color: "#f59e0b" },
+		my: { label: "我的", icon: "material-symbols:person", color: "#8b5cf6" },
 		hidden: { label: "已隐藏", icon: "material-symbols:visibility-off", color: "#94a3b8" },
 	};
 
@@ -557,8 +557,8 @@ ${faviconStr}
 		followTheme: ${nb.followTheme ?? false},
 		// 导航栏是否固定在顶部并始终可见
 		stickyNavbar: ${nb.stickyNavbar !== false},
-		// 导航链接配置（完整控制导航栏链接的分组、顺序和显示）
-		// parent 可选值: "top"(顶级导航), "posts"(文章下拉), "contact"(联系我下拉), "my"(我的下拉), "hidden"(隐藏)
+		// 导航链接配置（完整控制导航结构）
+		// parent 可选值: "top"(导航栏), "posts"(文章菜单), "contact"(联系我菜单), "my"(我的菜单), "hidden"(隐藏)
 		// type: "preset"(预设链接，通过id引用) | "custom"(自定义链接，需提供name/url)
 		navItems: [
 ${navItemsStr}
@@ -1035,8 +1035,8 @@ ${pagesStr}
 				</div>
 				<div class="config-card-body">
 					<p class="config-hint">
-						完全控制导航栏链接：可以将预设链接（如"关于"、"友链"）移动到任意分组，调整顺序，隐藏不需要的链接，或添加自定义链接。
-						分组：顶级导航（直接显示）| 文章下拉 | 联系我下拉 | 我的下拉 | 已隐藏。
+						完全控制导航栏链接：可以将预设链接（如"关于"、"友链"）移动到任意菜单，调整顺序，隐藏不需要的链接，或添加自定义链接。
+						分组：导航栏（直接显示）| 文章 | 联系我 | 我的 | 已隐藏。
 					</p>
 
 					<div class="nav-groups">
@@ -1118,12 +1118,12 @@ ${pagesStr}
 														class="nav-parent-select"
 														value={item.parent}
 														onchange={(e) => changeNavItemParent(item.id, (e.target as HTMLSelectElement).value as NavParent)}
-														title="移动到分组"
+														title="移动到菜单"
 													>
-														<option value="top" disabled={item.id === "home"}>顶级导航</option>
-														<option value="posts">文章下拉</option>
-														<option value="contact">联系我下拉</option>
-														<option value="my">我的下拉</option>
+														<option value="top" disabled={item.id === "home"}>导航栏</option>
+														<option value="posts">文章</option>
+														<option value="contact">联系我</option>
+														<option value="my">我的</option>
 														<option value="hidden" disabled={item.id === "home"}>隐藏</option>
 													</select>
 													<div class="nav-item-btns">
