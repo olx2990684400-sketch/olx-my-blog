@@ -70,6 +70,7 @@
 				if (!config.themeColor) config.themeColor = { hue: 165, fixed: false, defaultMode: "light" };
 				if (!config.navbar) config.navbar = {};
 				if (!config.navbar.logo) config.navbar.logo = { type: "icon", value: "", alt: "logo" };
+				if (!config.navbar.customLinks) config.navbar.customLinks = [];
 				if (!config.pages) config.pages = {};
 				if (!config.pagination) config.pagination = { postsPerPage: 10 };
 				if (!config.postListLayout) config.postListLayout = { defaultMode: "list" };
@@ -141,6 +142,47 @@
 		hasChanges = true;
 	}
 
+	// ============ 自定义导航链接管理 ============
+	function getCustomLinks() {
+		return config.navbar?.customLinks || [];
+	}
+
+	function addCustomLink() {
+		if (!config.navbar) config.navbar = {};
+		if (!config.navbar.customLinks) config.navbar.customLinks = [];
+		config.navbar.customLinks = [
+			...config.navbar.customLinks,
+			{ name: "", url: "", icon: "", external: false, parent: "my" },
+		];
+		hasChanges = true;
+	}
+
+	function updateCustomLink(index: number, field: string, value: any) {
+		const links = [...(config.navbar?.customLinks || [])];
+		links[index] = { ...links[index], [field]: value };
+		config.navbar = { ...config.navbar, customLinks: links };
+		config = { ...config };
+		hasChanges = true;
+	}
+
+	function removeCustomLink(index: number) {
+		const links = [...(config.navbar?.customLinks || [])];
+		links.splice(index, 1);
+		config.navbar = { ...config.navbar, customLinks: links };
+		config = { ...config };
+		hasChanges = true;
+	}
+
+	function moveCustomLink(index: number, dir: -1 | 1) {
+		const links = [...(config.navbar?.customLinks || [])];
+		const target = index + dir;
+		if (target < 0 || target >= links.length) return;
+		[links[index], links[target]] = [links[target], links[index]];
+		config.navbar = { ...config.navbar, customLinks: links };
+		config = { ...config };
+		hasChanges = true;
+	}
+
 	// ============ 代码模式切换 ============
 	function toggleCodeMode() {
 		if (!codeMode) {
@@ -207,6 +249,20 @@
 		const umamiReplays = umami.relpays || {};
 		const ghHeatmap = hm.github || { enabled: true, username: "" };
 
+		// 自定义链接
+		const customLinks = nb.customLinks || [];
+		const customLinksStr = customLinks.length > 0
+			? customLinks.map((cl: any) => {
+					const parts: string[] = [];
+					parts.push(`\t\t\tname: ${JSON.stringify(cl.name)}`);
+					parts.push(`\t\t\turl: ${JSON.stringify(cl.url)}`);
+					if (cl.icon) parts.push(`\t\t\ticon: ${JSON.stringify(cl.icon)}`);
+					if (cl.external) parts.push(`\t\t\texternal: true`);
+					if (cl.parent && cl.parent !== "my") parts.push(`\t\t\tparent: ${JSON.stringify(cl.parent)}`);
+					return `\t\t{\n${parts.join(",\n")},\n\t\t}`;
+				}).join(",\n")
+			: "";
+
 		return `import type { SiteConfig } from "@/types/config";
 import { fontConfig } from "./fontConfig";
 
@@ -215,211 +271,216 @@ import { fontConfig } from "./fontConfig";
 const SITE_LANG = ${JSON.stringify(cfg.lang || "zh_CN")};
 
 export const siteConfig: SiteConfig = {
-\t// 站点标题
-\ttitle: ${JSON.stringify(cfg.title || "")},
+	// 站点标题
+	title: ${JSON.stringify(cfg.title || "")},
 
-\t// 站点副标题
-\tsubtitle: ${JSON.stringify(cfg.subtitle || "")},
+	// 站点副标题
+	subtitle: ${JSON.stringify(cfg.subtitle || "")},
 
-\t// 站点 URL
-\tsite_url: ${JSON.stringify(cfg.site_url || "")},
+	// 站点 URL
+	site_url: ${JSON.stringify(cfg.site_url || "")},
 
-\t// 站点描述
-\tdescription: ${JSON.stringify(cfg.description || "")},
+	// 站点描述
+	description: ${JSON.stringify(cfg.description || "")},
 
-\t// 站点关键词
-\tkeywords: [
+	// 站点关键词
+	keywords: [
 ${keywordsStr}
-\t],
+	],
 
-\t// 主题色
-\tthemeColor: {
-\t\t// 主题色的默认色相，范围从 0 到 360。例如：红色：0，青色：200，蓝绿色：250，粉色：345
-\t\thue: ${tc.hue ?? 165},
-\t\t// 是否对访问者隐藏主题色选择器
-\t\tfixed: ${tc.fixed ?? false},
-\t\t// 默认模式："light" 亮色，"dark" 暗色
-\t\tdefaultMode: ${JSON.stringify(tc.defaultMode || "light")},
-\t},
+	// 主题色
+	themeColor: {
+		// 主题色的默认色相，范围从 0 到 360。例如：红色：0，青色：200，蓝绿色：250，粉色：345
+		hue: ${tc.hue ?? 165},
+		// 是否对访问者隐藏主题色选择器
+		fixed: ${tc.fixed ?? false},
+		// 默认模式："light" 亮色，"dark" 暗色
+		defaultMode: ${JSON.stringify(tc.defaultMode || "light")},
+	},
 
-\t// 页面整体宽度（单位：rem）
-\tpageWidth: ${pw},
+	// 页面整体宽度（单位：rem）
+	pageWidth: ${pw},
 
-\t// 网站Card样式配置
-\tcard: {
-\t\t// 是否开启卡片边框和阴影，开启后让网站更有立体感
-\t\tborder: ${cc.border !== false},
-\t\t// 是否让卡片风格跟随主题色相
-\t\tfollowTheme: ${cc.followTheme ?? false},
-\t},
+	// 网站Card样式配置
+	card: {
+		// 是否开启卡片边框和阴影，开启后让网站更有立体感
+		border: ${cc.border !== false},
+		// 是否让卡片风格跟随主题色相
+		followTheme: ${cc.followTheme ?? false},
+	},
 
-\t// Favicon 配置
-\tfavicon: [
+	// Favicon 配置
+	favicon: [
 ${faviconStr}
-\t],
+	],
 
-\t// 导航栏配置
-\tnavbar: {
-\t\t// 导航栏Logo
-\t\tlogo: {
-\t\t\ttype: ${JSON.stringify(logo.type || "icon")},
-\t\t\tvalue: ${JSON.stringify(logo.value || "")},
-\t\t\talt: ${JSON.stringify(logo.alt || "logo")},
-\t\t},
-\t\t// 导航栏标题
-\t\ttitle: ${JSON.stringify(nb.title || "")},
-\t\t// 全宽导航栏，导航栏是否占满屏幕宽度
-\t\twidthFull: ${nb.widthFull ?? false},
-\t\t// 导航菜单对齐方式，left：左对齐，center：居中
-\t\tmenuAlign: ${JSON.stringify(nb.menuAlign || "center")},
-\t\t// 导航栏图标和标题是否跟随主题色
-\t\tfollowTheme: ${nb.followTheme ?? false},
-\t\t// 导航栏是否固定在顶部并始终可见
-\t\tstickyNavbar: ${nb.stickyNavbar !== false},
-\t},
+	// 导航栏配置
+	navbar: {
+		// 导航栏Logo
+		logo: {
+			type: ${JSON.stringify(logo.type || "icon")},
+			value: ${JSON.stringify(logo.value || "")},
+			alt: ${JSON.stringify(logo.alt || "logo")},
+		},
+		// 导航栏标题
+		title: ${JSON.stringify(nb.title || "")},
+		// 全宽导航栏，导航栏是否占满屏幕宽度
+		widthFull: ${nb.widthFull ?? false},
+		// 导航菜单对齐方式，left：左对齐，center：居中
+		menuAlign: ${JSON.stringify(nb.menuAlign || "center")},
+		// 导航栏图标和标题是否跟随主题色
+		followTheme: ${nb.followTheme ?? false},
+		// 导航栏是否固定在顶部并始终可见
+		stickyNavbar: ${nb.stickyNavbar !== false},
+		// 自定义导航链接，可添加额外的导航项
+		// parent 可选值: "top"(顶级导航), "posts"(文章下拉), "contact"(联系我下拉), "my"(我的下拉, 默认)
+		customLinks: [
+${customLinksStr}
+		],
+	},
 
-\t// 站点开始日期，用于统计运行天数
-\tsiteStartDate: ${JSON.stringify(cfg.siteStartDate || "")},
+	// 站点开始日期，用于统计运行天数
+	siteStartDate: ${JSON.stringify(cfg.siteStartDate || "")},
 
-\t// 站点时区（IANA 时区字符串），用于格式化bangumi、rss里的构建日期时间等等..
-\ttimezone: ${JSON.stringify(cfg.timezone || "")},
+	// 站点时区（IANA 时区字符串），用于格式化bangumi、rss里的构建日期时间等等..
+	timezone: ${JSON.stringify(cfg.timezone || "")},
 
-\t// 上下班时间配置（24小时制），用于首页头像涟漪动效和状态按钮
-\tworkHours: {
-\t\tstart: ${wh.start ?? 9}, // 上班时间
-\t\tend: ${wh.end ?? 18}, // 下班时间
-\t\tworkDays: [${workDaysStr}],
-\t},
+	// 上下班时间配置（24小时制），用于首页头像涟漪动效和状态按钮
+	workHours: {
+		start: ${wh.start ?? 9}, // 上班时间
+		end: ${wh.end ?? 18}, // 下班时间
+		workDays: [${workDaysStr}],
+	},
 
-\t// 提醒框（Admonitions）配置
-\trehypeCallouts: {
-\t\ttheme: ${JSON.stringify(rc.theme || "github")},
-\t},
+	// 提醒框（Admonitions）配置
+	rehypeCallouts: {
+		theme: ${JSON.stringify(rc.theme || "github")},
+	},
 
-\t// 文章页底部的"上次编辑时间"卡片开关
-\tshowLastModified: ${slm},
+	// 文章页底部的"上次编辑时间"卡片开关
+	showLastModified: ${slm},
 
-\t// 文章过期阈值（天数），超过此天数才显示"上次编辑"卡片
-\toutdatedThreshold: ${ot},
+	// 文章过期阈值（天数），超过此天数才显示"上次编辑"卡片
+	outdatedThreshold: ${ot},
 
-\t// 是否开启分享海报生成功能
-\tsharePoster: ${sp},
+	// 是否开启分享海报生成功能
+	sharePoster: ${sp},
 
-\t// OpenGraph图片功能,注意开启后要渲染很长时间，不建议本地调试的时候开启
-\tgenerateOgImages: ${goi},
+	// OpenGraph图片功能,注意开启后要渲染很长时间，不建议本地调试的时候开启
+	generateOgImages: ${goi},
 
-\tdefaultOgImage: ${JSON.stringify(doi)},
+	defaultOgImage: ${JSON.stringify(doi)},
 
-\t// 页面开关配置 - 控制特定页面的访问权限，设为false会返回404
-\tpages: {
+	// 页面开关配置 - 控制特定页面的访问权限，设为false会返回404
+	pages: {
 ${pagesStr}
-\t},
+	},
 
-\t// 分类导航栏开关，在首页和归档页顶部显示分类快捷导航
-\tcategoryBar: ${cb},
+	// 分类导航栏开关，在首页和归档页顶部显示分类快捷导航
+	categoryBar: ${cb},
 
-\t// 文章列表布局配置
-\tpostListLayout: {
-\t\t// 默认布局模式："list" 列表模式（单列布局），"grid" 网格模式（多列布局）
-\t\tdefaultMode: ${JSON.stringify(pl.defaultMode || "list")},
-\t\t// 移动端默认布局模式，不设置则跟随 defaultMode
-\t\tmobileDefaultMode: ${JSON.stringify(pl.mobileDefaultMode || "list")},
-\t\t// 是否在文章列表中显示标签
-\t\tshowTags: ${pl.showTags !== false},
-\t\t// 文章简介显示行数，设为 0 则不截断
-\t\tdescriptionLines: ${pl.descriptionLines ?? 2},
-\t\t// 是否允许用户切换布局
-\t\tallowSwitch: ${pl.allowSwitch !== false},
-\t\t// 网格布局配置
-\t\tgrid: {
-\t\t\t// 是否开启瀑布流布局
-\t\t\tmasonry: ${pl.grid?.masonry ?? false},
-\t\t\t// 网格模式卡片最小宽度(px)
-\t\t\tcolumnWidth: ${pl.grid?.columnWidth ?? 320},
-\t\t},
-\t},
+	// 文章列表布局配置
+	postListLayout: {
+		// 默认布局模式："list" 列表模式（单列布局），"grid" 网格模式（多列布局）
+		defaultMode: ${JSON.stringify(pl.defaultMode || "list")},
+		// 移动端默认布局模式，不设置则跟随 defaultMode
+		mobileDefaultMode: ${JSON.stringify(pl.mobileDefaultMode || "list")},
+		// 是否在文章列表中显示标签
+		showTags: ${pl.showTags !== false},
+		// 文章简介显示行数，设为 0 则不截断
+		descriptionLines: ${pl.descriptionLines ?? 2},
+		// 是否允许用户切换布局
+		allowSwitch: ${pl.allowSwitch !== false},
+		// 网格布局配置
+		grid: {
+			// 是否开启瀑布流布局
+			masonry: ${pl.grid?.masonry ?? false},
+			// 网格模式卡片最小宽度(px)
+			columnWidth: ${pl.grid?.columnWidth ?? 320},
+		},
+	},
 
-\t// 分页配置
-\tpagination: {
-\t\t// 每页显示的文章数量
-\t\tpostsPerPage: ${pn.postsPerPage ?? 10},
-\t},
+	// 分页配置
+	pagination: {
+		// 每页显示的文章数量
+		postsPerPage: ${pn.postsPerPage ?? 10},
+	},
 
-\t// 统计分析
-\tanalytics: {
-\t\t// Google Analytics ID
-\t\tgoogleAnalyticsId: ${JSON.stringify(googleId)},
-\t\t// Microsoft Clarity ID
-\t\tmicrosoftClarityId: ${JSON.stringify(msClarityId)},
-\t\t// Umami 统计配置
-\t\tumamiAnalytics: {
-\t\t\twebsiteId: ${JSON.stringify(umami.websiteId || "")},
-\t\t\tshareId: ${JSON.stringify(umami.shareId || "")},
-\t\t\tscriptUrl: ${JSON.stringify(umami.scriptUrl || "")},
-\t\t\t// 是否追踪出站链接
-\t\t\ttrackOutboundLinks: ${umami.trackOutboundLinks !== false},
-\t\t\t// 是否收集浏览器性能指标
-\t\t\tcollectWebVitals: ${umami.collectWebVitals ?? false},
-\t\t\t// 会话回放配置
-\t\t\trelpays: {
-\t\t\t\t// 是否启用会话回放
-\t\t\t\tenabled: ${umamiReplays.enabled ?? false},
-\t\t\t\t// 录制会话采样率，范围 0-1
-\t\t\t\tsampleRate: ${umamiReplays.sampleRate ?? 0.15},
-\t\t\t\t// 隐私遮罩级别
-\t\t\t\tmaskLevel: ${JSON.stringify(umamiReplays.maskLevel || "moderate")},
-\t\t\t\t// 单次录制最大时长（毫秒）
-\t\t\t\tmaxDuration: ${umamiReplays.maxDuration ?? 300000},
-\t\t\t\t// 需要排除录制的元素 CSS 选择器
-\t\t\t\tblockSelector: ${JSON.stringify(umamiReplays.blockSelector || "")},
-\t\t\t},
-\t\t},
-\t\t// 51la 统计配置
-\t\tla51Analytics: {
-\t\t\t// 51la 统计 ID
-\t\t\tId: ${JSON.stringify(la51.Id || "")},
-\t\t\t// 自定义 SDK JS 地址
-\t\t\tsdkUrl: ${JSON.stringify(la51.sdkUrl || "")},
-\t\t\t// 多个统计 ID 的数据分离标识
-\t\t\tck: ${JSON.stringify(la51.ck || "")},
-\t\t\t// 是否开启事件分析功能
-\t\t\tautoTrack: ${la51.autoTrack ?? false},
-\t\t\t// Hash路由模式
-\t\t\thashMode: ${la51.hashMode ?? false},
-\t\t\t// 是否开启网站录屏功能
-\t\t\tscreenRecord: ${la51.screenRecord !== false},
-\t\t},
-\t},
+	// 统计分析
+	analytics: {
+		// Google Analytics ID
+		googleAnalyticsId: ${JSON.stringify(googleId)},
+		// Microsoft Clarity ID
+		microsoftClarityId: ${JSON.stringify(msClarityId)},
+		// Umami 统计配置
+		umamiAnalytics: {
+			websiteId: ${JSON.stringify(umami.websiteId || "")},
+			shareId: ${JSON.stringify(umami.shareId || "")},
+			scriptUrl: ${JSON.stringify(umami.scriptUrl || "")},
+			// 是否追踪出站链接
+			trackOutboundLinks: ${umami.trackOutboundLinks !== false},
+			// 是否收集浏览器性能指标
+			collectWebVitals: ${umami.collectWebVitals ?? false},
+			// 会话回放配置
+			relpays: {
+				// 是否启用会话回放
+				enabled: ${umamiReplays.enabled ?? false},
+				// 录制会话采样率，范围 0-1
+				sampleRate: ${umamiReplays.sampleRate ?? 0.15},
+				// 隐私遮罩级别
+				maskLevel: ${JSON.stringify(umamiReplays.maskLevel || "moderate")},
+				// 单次录制最大时长（毫秒）
+				maxDuration: ${umamiReplays.maxDuration ?? 300000},
+				// 需要排除录制的元素 CSS 选择器
+				blockSelector: ${JSON.stringify(umamiReplays.blockSelector || "")},
+			},
+		},
+		// 51la 统计配置
+		la51Analytics: {
+			// 51la 统计 ID
+			Id: ${JSON.stringify(la51.Id || "")},
+			// 自定义 SDK JS 地址
+			sdkUrl: ${JSON.stringify(la51.sdkUrl || "")},
+			// 多个统计 ID 的数据分离标识
+			ck: ${JSON.stringify(la51.ck || "")},
+			// 是否开启事件分析功能
+			autoTrack: ${la51.autoTrack ?? false},
+			// Hash路由模式
+			hashMode: ${la51.hashMode ?? false},
+			// 是否开启网站录屏功能
+			screenRecord: ${la51.screenRecord !== false},
+		},
+	},
 
-\t// 热力图配置
-\theatmap: {
-\t\tgithub: {
-\t\t\tenabled: ${ghHeatmap.enabled !== false},
-\t\t\tusername: ${JSON.stringify(ghHeatmap.username || "")},
-\t\t},
-\t},
+	// 热力图配置
+	heatmap: {
+		github: {
+			enabled: ${ghHeatmap.enabled !== false},
+			username: ${JSON.stringify(ghHeatmap.username || "")},
+		},
+	},
 
-\t// 图像优化及响应式配置
-\timageOptimization: {
-\t\t// 输出图片格式
-\t\tformats: ${JSON.stringify(io.formats || "webp")},
-\t\t// 图片压缩质量 (1-100)
-\t\tquality: ${io.quality ?? 85},
-\t\t// 为特定域名的图片添加 referrerpolicy="no-referrer" 属性
-\t\tnoReferrerDomains: ${JSON.stringify(io.noReferrerDomains || [])},
-\t},
+	// 图像优化及响应式配置
+	imageOptimization: {
+		// 输出图片格式
+		formats: ${JSON.stringify(io.formats || "webp")},
+		// 图片压缩质量 (1-100)
+		quality: ${io.quality ?? 85},
+		// 为特定域名的图片添加 referrerpolicy="no-referrer" 属性
+		noReferrerDomains: ${JSON.stringify(io.noReferrerDomains || [])},
+	},
 
-\t// 字体配置
-\tfont: fontConfig,
+	// 字体配置
+	font: fontConfig,
 
-\t// 站点语言，在本配置文件顶部SITE_LANG定义
-\tlang: SITE_LANG,
+	// 站点语言，在本配置文件顶部SITE_LANG定义
+	lang: SITE_LANG,
 
-\t// 备案号配置，留空则不显示
-\tbeian: ${JSON.stringify(cfg.beian || "")},
+	// 备案号配置，留空则不显示
+	beian: ${JSON.stringify(cfg.beian || "")},
 
-\t// 公安网备号配置，留空则不显示
-\tpoliceBeian: ${JSON.stringify(cfg.policeBeian || "")},
+	// 公安网备号配置，留空则不显示
+	policeBeian: ${JSON.stringify(cfg.policeBeian || "")},
 };
 `;
 	}
@@ -732,7 +793,78 @@ ${pagesStr}
 				</div>
 			</div>
 
-			<!-- d. 页面开关 -->
+			<!-- d. 自定义导航链接 -->
+			<div class="config-card">
+				<div class="config-card-header">
+					<iconify-icon icon="material-symbols:add-link-rounded" class="text-lg"></iconify-icon>
+					<h3>自定义导航链接</h3>
+					<button class="config-add-btn" onclick={addCustomLink} title="添加链接">
+						<iconify-icon icon="material-symbols:add-rounded"></iconify-icon> 添加
+					</button>
+				</div>
+				<div class="config-card-body">
+					<p class="config-hint">添加自定义链接到导航栏，可以选择放到"我的"下拉、"文章"下拉、"联系我"下拉或顶级导航。</p>
+					{#if getCustomLinks().length === 0}
+						<div class="config-empty-hint">
+							<iconify-icon icon="material-symbols:link-off-rounded" style="font-size:32px;opacity:0.3"></iconify-icon>
+							<span>暂无自定义链接，点击"添加"创建</span>
+						</div>
+					{:else}
+						<div class="custom-links-list">
+							{#each getCustomLinks() as link, idx (idx)}
+								{#if !link._deleted}
+									<div class="custom-link-item">
+										<div class="cli-actions">
+											<button class="cli-btn cli-move" onclick={() => moveCustomLink(idx, -1)} disabled={idx === 0} title="上移">
+												<iconify-icon icon="material-symbols:keyboard-arrow-up-rounded"></iconify-icon>
+											</button>
+											<button class="cli-btn cli-move" onclick={() => moveCustomLink(idx, 1)} disabled={idx === getCustomLinks().length - 1} title="下移">
+												<iconify-icon icon="material-symbols:keyboard-arrow-down-rounded"></iconify-icon>
+											</button>
+											<button class="cli-btn cli-delete" onclick={() => removeCustomLink(idx)} title="删除">
+												<iconify-icon icon="material-symbols:delete-outline-rounded"></iconify-icon>
+											</button>
+										</div>
+										<div class="cli-fields">
+											<div class="cli-field-row">
+												<div class="form-group cli-field-cli-name">
+													<label>名称 *</label>
+													<input type="text" class="form-input" value={link.name} oninput={(e) => updateCustomLink(idx, "name", (e.target as HTMLInputElement).value)} placeholder="链接名称" />
+												</div>
+												<div class="form-group cli-field-cli-url">
+													<label>URL *</label>
+													<input type="text" class="form-input" value={link.url} oninput={(e) => updateCustomLink(idx, "url", (e.target as HTMLInputElement).value)} placeholder="/path/ 或 https://..." />
+												</div>
+												<div class="form-group cli-field-cli-parent">
+													<label>位置</label>
+													<select class="form-select" value={link.parent || "my"} onchange={(e) => updateCustomLink(idx, "parent", (e.target as HTMLSelectElement).value)}>
+														<option value="my">我的（下拉）</option>
+														<option value="posts">文章（下拉）</option>
+														<option value="contact">联系我（下拉）</option>
+														<option value="top">顶级导航</option>
+													</select>
+												</div>
+											</div>
+											<div class="cli-field-row">
+												<div class="form-group cli-field-cli-icon">
+													<label>图标（Iconify名称，可选）</label>
+													<input type="text" class="form-input" value={link.icon || ""} oninput={(e) => updateCustomLink(idx, "icon", (e.target as HTMLInputElement).value)} placeholder="material-symbols:link" />
+												</div>
+												<label class="form-check-label cli-external-check">
+													<input type="checkbox" class="form-check" checked={link.external || false} onchange={(e) => updateCustomLink(idx, "external", (e.target as HTMLInputElement).checked)} />
+													<span>外部链接</span>
+												</label>
+											</div>
+										</div>
+									</div>
+								{/if}
+							{/each}
+						</div>
+					{/if}
+				</div>
+			</div>
+
+			<!-- e. 页面开关 -->
 			<div class="config-card">
 				<div class="config-card-header">
 					<iconify-icon icon="material-symbols:toggle-on-outline-rounded" class="text-lg"></iconify-icon>
@@ -756,7 +888,7 @@ ${pagesStr}
 				</div>
 			</div>
 
-			<!-- e. 页脚信息 -->
+			<!-- f. 页脚信息 -->
 			<div class="config-card">
 				<div class="config-card-header">
 					<iconify-icon icon="material-symbols:verified-outline-rounded" class="text-lg"></iconify-icon>
@@ -788,7 +920,7 @@ ${pagesStr}
 				</div>
 			</div>
 
-			<!-- f. 其他设置 -->
+			<!-- g. 其他设置 -->
 			<div class="config-card">
 				<div class="config-card-header">
 					<iconify-icon icon="material-symbols:settings-outline-rounded" class="text-lg"></iconify-icon>
@@ -1079,6 +1211,129 @@ ${pagesStr}
 		accent-color: hsl(var(--theme-hue, 165), 70%, 50%);
 		cursor: pointer;
 		border-radius: 4px;
+	}
+
+	/* 添加按钮 */
+	.config-add-btn {
+		margin-left: auto;
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		padding: 5px 12px;
+		border-radius: 8px;
+		font-size: 12px;
+		font-weight: 600;
+		cursor: pointer;
+		border: 1.5px solid hsla(var(--theme-hue, 165), 70%, 50%, 0.4);
+		background: hsla(var(--theme-hue, 165), 70%, 50%, 0.08);
+		color: hsl(var(--theme-hue, 165), 70%, 45%);
+		transition: all 0.15s;
+		font-family: inherit;
+	}
+	.config-add-btn:hover {
+		background: hsla(var(--theme-hue, 165), 70%, 50%, 0.15);
+		border-color: hsl(var(--theme-hue, 165), 70%, 50%);
+	}
+
+	/* 配置提示文字 */
+	.config-hint {
+		margin: 0 0 12px;
+		font-size: 12px;
+		color: var(--content-meta, #6b7280);
+		line-height: 1.5;
+	}
+	:global(.dark) .config-hint {
+		color: #9ca3af;
+	}
+
+	/* 空状态提示 */
+	.config-empty-hint {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 8px;
+		padding: 24px;
+		color: var(--content-meta, #9ca3af);
+		font-size: 13px;
+		border-radius: 10px;
+		border: 1.5px dashed var(--border, rgba(0,0,0,0.1));
+	}
+
+	/* 自定义链接列表 */
+	.custom-links-list {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+	}
+	.custom-link-item {
+		display: flex;
+		gap: 8px;
+		padding: 12px;
+		border-radius: 10px;
+		border: 1px solid var(--border, rgba(0,0,0,0.08));
+		background: var(--bg-color, #fafafa);
+	}
+	:global(.dark) .custom-link-item {
+		background: rgba(255,255,255,0.02);
+		border-color: rgba(255,255,255,0.06);
+	}
+	.cli-actions {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		flex-shrink: 0;
+	}
+	.cli-btn {
+		width: 28px;
+		height: 28px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 6px;
+		border: none;
+		cursor: pointer;
+		font-size: 16px;
+		transition: all 0.15s;
+		background: var(--btn-plain-bg, rgba(0,0,0,0.05));
+		color: var(--text-secondary, #6b7280);
+	}
+	.cli-btn:hover:not(:disabled) {
+		background: var(--btn-plain-bg-hover, rgba(0,0,0,0.1));
+		color: var(--text-color, #1f2937);
+	}
+	.cli-btn:disabled {
+		opacity: 0.3;
+		cursor: not-allowed;
+	}
+	.cli-delete {
+		color: #ef4444 !important;
+	}
+	.cli-delete:hover:not(:disabled) {
+		background: rgba(239,68,68,0.1) !important;
+	}
+	.cli-fields {
+		flex: 1;
+		min-width: 0;
+	}
+	.cli-field-row {
+		display: flex;
+		gap: 8px;
+		align-items: flex-end;
+		margin-bottom: 8px;
+	}
+	.cli-field-row:last-child {
+		margin-bottom: 0;
+	}
+	.cli-field-cli-name { flex: 2; min-width: 0; }
+	.cli-field-cli-url { flex: 3; min-width: 0; }
+	.cli-field-cli-parent { flex: 0 0 120px; }
+	.cli-field-cli-icon { flex: 1; min-width: 0; }
+	.cli-external-check {
+		margin: 0 !important;
+		margin-top: 18px !important;
+		flex-shrink: 0;
+		padding: 0 4px;
+		white-space: nowrap;
 	}
 
 	/* 页面开关网格 */

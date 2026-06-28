@@ -17,10 +17,32 @@ import { siteConfig } from "./siteConfig";
  * - 先依次构建各导航项，再统一组装到 links 数组
  */
 const buildNavBarConfig = (): NavBarConfig => {
+	// 自定义链接（来自站点配置）
+	const customLinks = siteConfig.navbar?.customLinks || [];
+	const customTopLinks: NavBarLink[] = [];
+	const customPostsLinks: NavBarLink[] = [];
+	const customContactLinks: NavBarLink[] = [];
+	const customMyLinks: NavBarLink[] = [];
+
+	for (const cl of customLinks) {
+		if (!cl.name || !cl.url) continue;
+		const link: NavBarLink = {
+			name: cl.name,
+			url: cl.url,
+			external: cl.external ?? cl.url.startsWith("http"),
+			icon: cl.icon,
+		};
+		const parent = cl.parent || "my";
+		if (parent === "top") customTopLinks.push(link);
+		else if (parent === "posts") customPostsLinks.push(link);
+		else if (parent === "contact") customContactLinks.push(link);
+		else customMyLinks.push(link);
+	}
+
 	// 1. 构建文章下拉菜单
 	const postsNav: NavBarLink = {
 		...LinkPresets[LinkPreset.NavPosts],
-		children: [LinkPreset.Archive, LinkPreset.Categories, LinkPreset.PostList],
+		children: [LinkPreset.Archive, LinkPreset.Categories, LinkPreset.PostList, ...customPostsLinks],
 	};
 
 	// 2. 构建联系我下拉菜单
@@ -32,6 +54,7 @@ const buildNavBarConfig = (): NavBarConfig => {
 		contactChildren.push(LinkPreset.Guestbook);
 	}
 	contactChildren.push(LinkPreset.QQGroup);
+	contactChildren.push(...customContactLinks);
 
 	const contactNav: NavBarLink | null =
 		contactChildren.length > 0
@@ -85,6 +108,7 @@ const buildNavBarConfig = (): NavBarConfig => {
 	if (siteConfig.pages.sponsor) {
 		myChildren.push(LinkPreset.Sponsor);
 	}
+	myChildren.push(...customMyLinks);
 	myChildren.push(LinkPreset.About);
 
 	const myNav: NavBarLink = {
@@ -92,9 +116,10 @@ const buildNavBarConfig = (): NavBarConfig => {
 		children: myChildren,
 	};
 
-	// 4. 统一组装导航栏链接（顺序：主页 → 菲比啾比 → 工具导航 → 文章 → 联系我 → 我的）
+	// 4. 统一组装导航栏链接（顺序：主页 → 自定义顶级链接 → 文章 → 收藏 → 联系我 → 我的）
 	const links: (NavBarLink | LinkPreset)[] = [
 		LinkPreset.Home,
+		...customTopLinks,
 		postsNav,
 		...(siteConfig.pages.collections ? [LinkPreset.Collections] : []),
 		...(contactNav ? [contactNav] : []),

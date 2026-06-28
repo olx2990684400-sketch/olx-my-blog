@@ -73,6 +73,15 @@ export type SiteConfig = {
 		menuAlign?: "left" | "center"; // 导航菜单对齐方式（仅桌面端菜单）
 		followTheme?: boolean; // 导航栏图标和标题是否跟随主题色
 		stickyNavbar?: boolean; // 导航栏是否固定在顶部始终可见
+		/** 自定义导航链接 */
+		customLinks?: {
+			name: string;
+			url: string;
+			icon?: string;
+			external?: boolean;
+			/** 父级菜单: "top"(顶级导航), "posts"(文章下拉), "contact"(联系我下拉), "my"(我的下拉) */
+			parent?: "top" | "posts" | "contact" | "my";
+		}[];
 	};
 
 	showLastModified: boolean; // 控制"上次编辑"卡片显示的开关
