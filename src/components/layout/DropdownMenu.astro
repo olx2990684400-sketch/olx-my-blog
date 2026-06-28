@@ -55,6 +55,7 @@ const hasChildren = processedLink.children && processedLink.children.length > 0;
 			<div class="dropdown-content-wrapper">
 				{processedLink.children?.map((child, index) => {
 					const isLast = index === (processedLink.children?.length || 0) - 1;
+					const noSwup = ['/friends/', '/collections/', '/moments/', '/bangumi/', '/write/', '/config/'].includes(child.url);
 					return child.action ? (
 						<button
 							type="button"
@@ -70,6 +71,7 @@ const hasChildren = processedLink.children && processedLink.children.length > 0;
 							target={child.external ? "_blank" : undefined}
 							isLast={isLast}
 							class="dropdown-item"
+							noSwup={noSwup}
 						>
 							{child.icon && <Icon name={child.icon} is:inline class="text-[1.25rem] mr-3 navbar-icon" />}
 							<span>{child.name}</span>

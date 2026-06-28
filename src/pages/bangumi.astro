@@ -3,6 +3,7 @@ import { getCollection } from "astro:content";
 import { Icon } from "astro-icon/components";
 import BangumiSection from "@/components/pages/bangumi/BangumiSection.astro";
 import TabNav from "@/components/pages/bangumi/TabNav.astro";
+import BangumiEditor from "@/components/edit/BangumiEditor.svelte";
 import { siteConfig } from "@/config";
 import { externalBangumiConfig } from "@/config/externalBangumiConfig";
 import I18nKey from "@/i18n/i18nKey";
@@ -172,6 +173,11 @@ const activeTab = tabs[0]?.id || "anime";
 					{i18n(I18nKey.bangumiLastUpdated)} {buildTime}
 				</p>
 			</header>
+
+			<!-- 番剧编辑器（编辑按钮、外部数据加载） -->
+			<div data-no-swup>
+				<BangumiEditor client:only />
+			</div>
 
 			<!-- Tab navigation and content -->
 			{tabs.length > 0 ? (

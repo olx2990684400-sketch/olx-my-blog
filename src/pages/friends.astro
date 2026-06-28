@@ -5,6 +5,7 @@ import Icon from "@components/common/Icon.astro";
 import FriendCard from "@components/features/FriendCard.astro";
 import FriendRulesModal from "@components/features/FriendRulesModal.astro";
 import PageTitle from "@/components/common/PageTitle.astro";
+import FriendsEditor from "@/components/edit/FriendsEditor.svelte";
 import {
 	commentConfig,
 	friendsPageConfig,
@@ -34,7 +35,6 @@ const isCommentEnabled =
 
 // 使用配置文件中的友链数据，按权重排序
 const items = getEnabledFriends();
-const allTags = [...new Set(items.flatMap((item) => item.tags || []))].sort();
 
 // 页面标题和描述
 const title = friendsPageConfig.title || i18n(I18nKey.friends);
@@ -51,17 +51,19 @@ const description =
       <div class="mb-4">
         <div class="flex items-start justify-between gap-4 mb-3">
           <PageTitle title={title} eyebrow="Friends" variant="stacked" />
-          {
-            friendsPageConfig.applyLink && (
-              <button
-                data-open-friend-rules
-                class="px-4 py-2 rounded-lg border border-neutral-900 dark:border-neutral-100 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-900 hover:text-neutral-100 dark:hover:bg-neutral-100 dark:hover:text-neutral-900 transition-colors duration-200 text-sm font-medium flex items-center gap-2 cursor-pointer"
-              >
-                <Icon name="material-symbols:help-outline-rounded" class="text-base" />
-                如何申请友链
-              </button>
-            )
-          }
+          <div class="flex items-center gap-2">
+            {
+              friendsPageConfig.applyLink && (
+                <button
+                  data-open-friend-rules
+                  class="px-4 py-2 rounded-lg border border-neutral-900 dark:border-neutral-100 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-900 hover:text-neutral-100 dark:hover:bg-neutral-100 dark:hover:text-neutral-900 transition-colors duration-200 text-sm font-medium flex items-center gap-2 cursor-pointer"
+                >
+                  <Icon name="material-symbols:help-outline-rounded" class="text-base" />
+                  如何申请友链
+                </button>
+              )
+            }
+          </div>
         </div>
         {
           description && (
@@ -72,44 +74,24 @@ const description =
         }
       </div>
 
-      <!-- 标签筛选 -->
-      {
-        items.length > 0 && (
-          <div class="friend-filter-tabs flex flex-wrap gap-1 mb-6 p-1 rounded-full border border-neutral-900 dark:border-neutral-100" data-friend-filter>
-            <button
-              data-tag="all"
-              class="friend-tab-btn relative z-10 px-4 py-1.5 rounded-full text-sm font-medium transition-colors duration-200 text-white dark:text-neutral-900"
-            >
-              {i18n(I18nKey.all)}
-            </button>
-            {allTags.map((tag) => (
-              <button
-                data-tag={tag}
-                class="friend-tab-btn relative z-10 px-4 py-1.5 rounded-full text-sm font-medium transition-colors duration-200 text-neutral-900 dark:text-neutral-100"
-              >
-                {tag}
-              </button>
-            ))}
-            <!-- 滑动指示器 -->
-            <div class="friend-tab-indicator absolute top-1 bottom-1 bg-neutral-900 dark:bg-neutral-100 rounded-full transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] pointer-events-none" style="left: 4px; width: 0px;"></div>
-          </div>
-        )
-      }
+      <!-- 友链编辑器工具栏（编辑按钮 + 外部Gist友链注入） -->
+      <div data-no-swup>
+        <FriendsEditor client:only />
+      </div>
 
-      <div class="friends-grid">
-        {
-          items.map((item) => (
-            <div class="friend-card" data-tags={item.tags?.join(",")} data-title={item.title}>
-              <FriendCard
-                title={item.title}
-                href={item.siteurl}
-                imgurl={item.imgurl}
-                desc={item.desc}
-                tags={item.tags}
-              />
-            </div>
-          ))
-        }
+      <!-- 友链网格（SSR 渲染本地友链） -->
+      <div class="friends-grid" id="friends-grid">
+        {items.map((item) => (
+          <div class="friend-card" data-friend-id={item.id || item.siteurl} data-tags={item.tags?.join(",")}>
+            <FriendCard
+              title={item.title}
+              href={item.siteurl}
+              imgurl={item.imgurl}
+              desc={item.desc}
+              tags={item.tags}
+            />
+          </div>
+        ))}
       </div>
     </div>
   </div>
@@ -125,75 +107,4 @@ const description =
   <FriendRulesModal applyLink={friendsPageConfig.applyLink} />
 
   <!-- 样式已迁移至 src/styles/pages/friends.css -->
-
-  <!-- 事件委托：document 级别，只注册一次，swup 导航后自动生效 -->
-  <script is:inline>
-    (function() {
-      if (window.__friendFilterReady) return;
-      window.__friendFilterReady = true;
-
-      function updateIndicator(container, button) {
-        var indicator = container.querySelector(".friend-tab-indicator");
-        if (!indicator || !button) return;
-        var parentRect = container.getBoundingClientRect();
-        var btnRect = button.getBoundingClientRect();
-        indicator.style.left = (btnRect.left - parentRect.left) + "px";
-        indicator.style.width = btnRect.width + "px";
-        indicator.style.opacity = "1";
-      }
-
-      // 事件委托：点击 friend-tab-btn 时处理
-      document.addEventListener("click", function(e) {
-        var button = e.target.closest(".friend-tab-btn");
-        if (!button) return;
-        var container = button.closest("[data-friend-filter]");
-        if (!container) return;
-
-        var selectedTag = button.dataset.tag;
-        var cardContainer = container.closest(".card-base");
-        if (!cardContainer) return;
-
-        // 更新指示器
-        updateIndicator(container, button);
-
-        // 更新按钮文字颜色
-        var filters = container.querySelectorAll(".friend-tab-btn");
-        filters.forEach(function(f) {
-          if (f === button) {
-            f.classList.remove("text-neutral-900", "dark:text-neutral-100");
-            f.classList.add("text-white", "dark:text-neutral-900");
-          } else {
-            f.classList.remove("text-white", "dark:text-neutral-900");
-            f.classList.add("text-neutral-900", "dark:text-neutral-100");
-          }
-        });
-
-        // 过滤卡片
-        var cards = cardContainer.querySelectorAll(".friend-card");
-        cards.forEach(function(card) {
-          var tags = (card.dataset.tags || "").split(",");
-          if (selectedTag === "all" || (selectedTag && tags.includes(selectedTag))) {
-            card.style.display = "";
-            card.classList.add("animate-fade-in-up");
-          } else {
-            card.style.display = "none";
-            card.classList.remove("animate-fade-in-up");
-          }
-        });
-      });
-
-      // 初始化指示器位置
-      function initIndicator() {
-        var container = document.querySelector("[data-friend-filter]");
-        if (!container) return;
-        var allBtn = container.querySelector('[data-tag="all"]');
-        if (allBtn) {
-          updateIndicator(container, allBtn);
-        }
-      }
-
-      initIndicator();
-      document.addEventListener("astro:page-load", initIndicator);
-    })();
-  </script>
 </MainGridLayout>

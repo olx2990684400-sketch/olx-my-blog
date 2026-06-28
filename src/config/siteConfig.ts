@@ -193,8 +193,8 @@ export const siteConfig: SiteConfig = {
 		changelog: true,
 		// 动态页面开关
 		moments: true,
-		// 后台管理页面开关
-		admin: true,
+		// 后台管理页面开关（已改为前端内嵌编辑模式，后台已弃用）
+		admin: false,
 		// 日常规划页面开关
 		lifeRoutines: true,
 		// 旅行足迹页面开关
