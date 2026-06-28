@@ -70,16 +70,21 @@
 				if (!config.themeColor) config.themeColor = { hue: 165, fixed: false, defaultMode: "light" };
 				if (!config.navbar) config.navbar = {};
 				if (!config.navbar.logo) config.navbar.logo = { type: "icon", value: "", alt: "logo" };
-				if (!config.navbar.customLinks) config.navbar.customLinks = [];
 				if (!config.pages) config.pages = {};
 				if (!config.pagination) config.pagination = { postsPerPage: 10 };
 				if (!config.postListLayout) config.postListLayout = { defaultMode: "list" };
+				// 初始化导航链接管理
+				initNavItems();
 				originalConfig = deepClone(config);
+				// 保存原始navItems的副本用于取消
+				originalNavItems = deepClone(navItems);
 			}
 		} catch (e) {
 			console.error("Failed to load site config:", e);
 		}
 	}
+
+	let originalNavItems = $state<NavItem[]>([]);
 
 	// ============ 安全访问辅助 ============
 	function getThemeColor() {
@@ -107,6 +112,7 @@
 
 	function handleCancel() {
 		config = deepClone(originalConfig);
+		navItems = deepClone(originalNavItems);
 		hasChanges = false;
 		codeMode = false;
 		showToast("已取消编辑", "info");
@@ -142,45 +148,260 @@
 		hasChanges = true;
 	}
 
-	// ============ 自定义导航链接管理 ============
-	function getCustomLinks() {
-		return config.navbar?.customLinks || [];
+	// ============ 导航栏链接管理 ============
+	type NavParent = "top" | "posts" | "contact" | "my" | "hidden";
+	type NavItem = {
+		id: string;
+		type: "preset" | "custom";
+		parent: NavParent;
+		name?: string;
+		url?: string;
+		icon?: string;
+		external?: boolean;
+	};
+
+	// 预设链接的中文名称、图标、页面开关依赖
+	const PRESET_META: Record<string, { label: string; icon: string; pageGate?: string }> = {
+		home: { label: "首页", icon: "material-symbols:home" },
+		archive: { label: "归档", icon: "material-symbols:schedule-outline-rounded" },
+		categories: { label: "分类标签", icon: "material-symbols:category" },
+		postlist: { label: "文章列表", icon: "material-symbols:list-alt-outline-rounded" },
+		collections: { label: "收藏", icon: "material-symbols:bookmark", pageGate: "collections" },
+		friends: { label: "友链", icon: "material-symbols:group", pageGate: "friends" },
+		guestbook: { label: "留言板", icon: "material-symbols:chat", pageGate: "guestbook" },
+		qqgroup: { label: "QQ群", icon: "fa7-brands:qq" },
+		fhome: { label: "导航主页", icon: "material-symbols:link" },
+		fnote: { label: "笔记", icon: "material-symbols:link" },
+		calendar: { label: "日历", icon: "material-symbols:calendar-today", pageGate: "calendar" },
+		bangumi: { label: "番剧", icon: "material-symbols:movie", pageGate: "bangumi" },
+		books: { label: "书架", icon: "material-symbols:book-5", pageGate: "books" },
+		moviesgames: { label: "影视游戏", icon: "material-symbols:movie", pageGate: "moviesGames" },
+		musicpage: { label: "音乐", icon: "material-symbols:music-note", pageGate: "musicPage" },
+		changelog: { label: "更新日志", icon: "material-symbols:history", pageGate: "changelog" },
+		moments: { label: "动态", icon: "material-symbols:local-cafe", pageGate: "moments" },
+		routines: { label: "日常规划", icon: "material-symbols:list-alt", pageGate: "lifeRoutines" },
+		places: { label: "旅行足迹", icon: "material-symbols:location-on", pageGate: "lifePlaces" },
+		notebooks: { label: "笔记本", icon: "material-symbols:menu-book", pageGate: "lifeNotebooks" },
+		gallery: { label: "相册", icon: "material-symbols:photo-library", pageGate: "gallery" },
+		sponsor: { label: "赞助", icon: "material-symbols:favorite", pageGate: "sponsor" },
+		about: { label: "关于", icon: "material-symbols:person" },
+	};
+
+	const PARENT_LABELS: Record<NavParent, { label: string; icon: string; color: string }> = {
+		top: { label: "顶级导航", icon: "material-symbols:top-panel-open", color: "#10b981" },
+		posts: { label: "文章下拉", icon: "material-symbols:article", color: "#3b82f6" },
+		contact: { label: "联系我下拉", icon: "material-symbols:mail", color: "#f59e0b" },
+		my: { label: "我的下拉", icon: "material-symbols:person", color: "#8b5cf6" },
+		hidden: { label: "已隐藏", icon: "material-symbols:visibility-off", color: "#94a3b8" },
+	};
+
+	let navItems = $state<NavItem[]>([]);
+
+	function getDefaultNavOrder(): NavItem[] {
+		const items: NavItem[] = [];
+		items.push({ id: "home", type: "preset", parent: "top" });
+		items.push({ id: "collections", type: "preset", parent: "top" });
+		items.push({ id: "archive", type: "preset", parent: "posts" });
+		items.push({ id: "categories", type: "preset", parent: "posts" });
+		items.push({ id: "postlist", type: "preset", parent: "posts" });
+		items.push({ id: "friends", type: "preset", parent: "contact" });
+		items.push({ id: "guestbook", type: "preset", parent: "contact" });
+		items.push({ id: "qqgroup", type: "preset", parent: "contact" });
+		items.push({ id: "fhome", type: "preset", parent: "my" });
+		items.push({ id: "fnote", type: "preset", parent: "my" });
+		items.push({ id: "calendar", type: "preset", parent: "my" });
+		items.push({ id: "bangumi", type: "preset", parent: "my" });
+		items.push({ id: "books", type: "preset", parent: "my" });
+		items.push({ id: "moviesgames", type: "preset", parent: "my" });
+		items.push({ id: "musicpage", type: "preset", parent: "my" });
+		items.push({ id: "changelog", type: "preset", parent: "my" });
+		items.push({ id: "moments", type: "preset", parent: "my" });
+		items.push({ id: "routines", type: "preset", parent: "my" });
+		items.push({ id: "places", type: "preset", parent: "my" });
+		items.push({ id: "notebooks", type: "preset", parent: "my" });
+		items.push({ id: "gallery", type: "preset", parent: "my" });
+		items.push({ id: "sponsor", type: "preset", parent: "my" });
+		items.push({ id: "about", type: "preset", parent: "my" });
+		return items;
 	}
 
-	function addCustomLink() {
-		if (!config.navbar) config.navbar = {};
-		if (!config.navbar.customLinks) config.navbar.customLinks = [];
-		config.navbar.customLinks = [
-			...config.navbar.customLinks,
-			{ name: "", url: "", icon: "", external: false, parent: "my" },
-		];
-		hasChanges = true;
+	/**
+	 * 判断预设链接是否在当前页面开关下可用
+	 */
+	function isPresetEnabled(key: string): boolean {
+		const meta = PRESET_META[key];
+		if (!meta) return true;
+		if (!meta.pageGate) return true;
+		return !!config.pages?.[meta.pageGate];
 	}
 
-	function updateCustomLink(index: number, field: string, value: any) {
-		const links = [...(config.navbar?.customLinks || [])];
-		links[index] = { ...links[index], [field]: value };
-		config.navbar = { ...config.navbar, customLinks: links };
+	function initNavItems() {
+		// 先从已有配置的navItems加载
+		const existing = config.navbar?.navItems;
+		if (existing && Array.isArray(existing) && existing.length > 0) {
+			navItems = existing.map((it: any) => ({
+				id: it.id,
+				type: it.type || "custom",
+				parent: it.parent || "my",
+				name: it.name,
+				url: it.url,
+				icon: it.icon,
+				external: !!it.external,
+			}));
+			// 补充可能缺失的预设链接（比如新版本新增的页面）
+			const existingIds = new Set(navItems.map((n) => n.id));
+			const defaults = getDefaultNavOrder();
+			for (const d of defaults) {
+				if (!existingIds.has(d.id)) {
+					navItems.push(d);
+				}
+			}
+			return;
+		}
+
+		// 兼容旧版customLinks
+		const oldCustomLinks = (config.navbar as any)?.customLinks;
+		const defaults = getDefaultNavOrder();
+		if (oldCustomLinks && Array.isArray(oldCustomLinks) && oldCustomLinks.length > 0) {
+			let customIdx = 0;
+			for (const cl of oldCustomLinks) {
+				if (!cl.name || !cl.url) continue;
+				defaults.push({
+					id: `custom-${Date.now()}-${customIdx++}`,
+					type: "custom",
+					parent: (cl.parent as NavParent) || "my",
+					name: cl.name,
+					url: cl.url,
+					icon: cl.icon || "",
+					external: !!cl.external,
+				});
+			}
+		}
+		navItems = defaults;
+	}
+
+	function getItemsByParent(parent: NavParent): NavItem[] {
+		return navItems.filter((n) => n.parent === parent);
+	}
+
+	function getItemIndex(id: string): number {
+		return navItems.findIndex((n) => n.id === id);
+	}
+
+	function moveNavItem(id: string, dir: -1 | 1) {
+		const idx = getItemIndex(id);
+		if (idx === -1) return;
+		const item = navItems[idx];
+		const groupItems = getItemsByParent(item.parent);
+		const groupIdx = groupItems.findIndex((g) => g.id === id);
+		const newGroupIdx = groupIdx + dir;
+		if (newGroupIdx < 0 || newGroupIdx >= groupItems.length) return;
+
+		// 计算在扁平数组中的目标位置
+		const targetId = groupItems[newGroupIdx].id;
+		const targetIdx = getItemIndex(targetId);
+		const newItems = [...navItems];
+		newItems.splice(idx, 1);
+		newItems.splice(targetIdx, 0, item);
+		navItems = newItems;
+		config.navbar = { ...(config.navbar || {}), navItems: [...navItems] };
 		config = { ...config };
 		hasChanges = true;
 	}
 
-	function removeCustomLink(index: number) {
-		const links = [...(config.navbar?.customLinks || [])];
-		links.splice(index, 1);
-		config.navbar = { ...config.navbar, customLinks: links };
+	function changeNavItemParent(id: string, newParent: NavParent) {
+		const idx = getItemIndex(id);
+		if (idx === -1) return;
+		navItems = navItems.map((n) => (n.id === id ? { ...n, parent: newParent } : n));
+		// 移动到对应分组的末尾
+		const item = navItems[idx];
+		const newItems = navItems.filter((n) => n.id !== id);
+		// 找到目标分组的最后一项，插入到它之后
+		let insertIdx = newItems.length;
+		for (let i = newItems.length - 1; i >= 0; i--) {
+			if (newItems[i].parent === newParent) {
+				insertIdx = i + 1;
+				break;
+			}
+		}
+		newItems.splice(insertIdx, 0, { ...item, parent: newParent });
+		navItems = newItems;
+		config.navbar = { ...(config.navbar || {}), navItems: [...navItems] };
 		config = { ...config };
 		hasChanges = true;
 	}
 
-	function moveCustomLink(index: number, dir: -1 | 1) {
-		const links = [...(config.navbar?.customLinks || [])];
-		const target = index + dir;
-		if (target < 0 || target >= links.length) return;
-		[links[index], links[target]] = [links[target], links[index]];
-		config.navbar = { ...config.navbar, customLinks: links };
+	function toggleNavItemHidden(id: string) {
+		const idx = getItemIndex(id);
+		if (idx === -1) return;
+		const item = navItems[idx];
+		// 预设链接不能删除，只能隐藏/显示
+		if (item.type === "preset") {
+			const newParent: NavParent = item.parent === "hidden" ? "my" : "hidden";
+			changeNavItemParent(id, newParent);
+		}
+	}
+
+	function addCustomNavItem(parent: NavParent = "my") {
+		const newItem: NavItem = {
+			id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+			type: "custom",
+			parent,
+			name: "新链接",
+			url: "/",
+			icon: "",
+			external: false,
+		};
+		// 插入到对应分组末尾
+		const newItems = [...navItems];
+		let insertIdx = newItems.length;
+		for (let i = newItems.length - 1; i >= 0; i--) {
+			if (newItems[i].parent === parent) {
+				insertIdx = i + 1;
+				break;
+			}
+		}
+		newItems.splice(insertIdx, 0, newItem);
+		navItems = newItems;
+		config.navbar = { ...(config.navbar || {}), navItems: [...navItems] };
 		config = { ...config };
 		hasChanges = true;
+	}
+
+	function updateCustomNavItem(id: string, field: string, value: any) {
+		navItems = navItems.map((n) => (n.id === id ? { ...n, [field]: value } : n));
+		config.navbar = { ...(config.navbar || {}), navItems: [...navItems] };
+		config = { ...config };
+		hasChanges = true;
+	}
+
+	function removeCustomNavItem(id: string) {
+		navItems = navItems.filter((n) => n.id !== id);
+		config.navbar = { ...(config.navbar || {}), navItems: [...navItems] };
+		config = { ...config };
+		hasChanges = true;
+	}
+
+	function resetNavItems() {
+		navItems = getDefaultNavOrder();
+		config.navbar = { ...(config.navbar || {}), navItems: [...navItems] };
+		config = { ...config };
+		hasChanges = true;
+		showToast("已重置为默认导航顺序", "info");
+	}
+
+	function getItemDisplayName(item: NavItem): string {
+		if (item.type === "preset") {
+			return PRESET_META[item.id]?.label || item.id;
+		}
+		return item.name || "(未命名)";
+	}
+
+	function getItemIcon(item: NavItem): string {
+		if (item.type === "preset") {
+			return PRESET_META[item.id]?.icon || "material-symbols:link";
+		}
+		return item.icon || "material-symbols:link";
 	}
 
 	// ============ 代码模式切换 ============
@@ -249,16 +470,20 @@
 		const umamiReplays = umami.relpays || {};
 		const ghHeatmap = hm.github || { enabled: true, username: "" };
 
-		// 自定义链接
-		const customLinks = nb.customLinks || [];
-		const customLinksStr = customLinks.length > 0
-			? customLinks.map((cl: any) => {
+		// 导航链接配置（完整控制导航结构）
+		const navItemsForCode = navItems || [];
+		const navItemsStr = navItemsForCode.length > 0
+			? navItemsForCode.map((it: NavItem) => {
 					const parts: string[] = [];
-					parts.push(`\t\t\tname: ${JSON.stringify(cl.name)}`);
-					parts.push(`\t\t\turl: ${JSON.stringify(cl.url)}`);
-					if (cl.icon) parts.push(`\t\t\ticon: ${JSON.stringify(cl.icon)}`);
-					if (cl.external) parts.push(`\t\t\texternal: true`);
-					if (cl.parent && cl.parent !== "my") parts.push(`\t\t\tparent: ${JSON.stringify(cl.parent)}`);
+					parts.push(`\t\t\tid: ${JSON.stringify(it.id)}`);
+					parts.push(`\t\t\ttype: ${JSON.stringify(it.type)}`);
+					parts.push(`\t\t\tparent: ${JSON.stringify(it.parent)}`);
+					if (it.type === "custom") {
+						if (it.name) parts.push(`\t\t\tname: ${JSON.stringify(it.name)}`);
+						if (it.url) parts.push(`\t\t\turl: ${JSON.stringify(it.url)}`);
+						if (it.icon) parts.push(`\t\t\ticon: ${JSON.stringify(it.icon)}`);
+						if (it.external) parts.push(`\t\t\texternal: true`);
+					}
 					return `\t\t{\n${parts.join(",\n")},\n\t\t}`;
 				}).join(",\n")
 			: "";
@@ -332,10 +557,11 @@ ${faviconStr}
 		followTheme: ${nb.followTheme ?? false},
 		// 导航栏是否固定在顶部并始终可见
 		stickyNavbar: ${nb.stickyNavbar !== false},
-		// 自定义导航链接，可添加额外的导航项
-		// parent 可选值: "top"(顶级导航), "posts"(文章下拉), "contact"(联系我下拉), "my"(我的下拉, 默认)
-		customLinks: [
-${customLinksStr}
+		// 导航链接配置（完整控制导航栏链接的分组、顺序和显示）
+		// parent 可选值: "top"(顶级导航), "posts"(文章下拉), "contact"(联系我下拉), "my"(我的下拉), "hidden"(隐藏)
+		// type: "preset"(预设链接，通过id引用) | "custom"(自定义链接，需提供name/url)
+		navItems: [
+${navItemsStr}
 		],
 	},
 
@@ -793,74 +1019,157 @@ ${pagesStr}
 				</div>
 			</div>
 
-			<!-- d. 自定义导航链接 -->
+			<!-- d. 导航栏链接管理 -->
 			<div class="config-card">
 				<div class="config-card-header">
-					<iconify-icon icon="material-symbols:add-link-rounded" class="text-lg"></iconify-icon>
-					<h3>自定义导航链接</h3>
-					<button class="config-add-btn" onclick={addCustomLink} title="添加链接">
-						<iconify-icon icon="material-symbols:add-rounded"></iconify-icon> 添加
-					</button>
+					<iconify-icon icon="material-symbols:menu-open-rounded" class="text-lg"></iconify-icon>
+					<h3>导航栏链接管理</h3>
+					<div class="config-header-actions">
+						<button class="config-btn-secondary" onclick={resetNavItems} title="恢复默认导航顺序">
+							<iconify-icon icon="material-symbols:settings-backup-restore-rounded"></iconify-icon> 重置默认
+						</button>
+						<button class="config-add-btn" onclick={() => addCustomNavItem("my")} title="添加自定义链接">
+							<iconify-icon icon="material-symbols:add-link-rounded"></iconify-icon> 添加链接
+						</button>
+					</div>
 				</div>
 				<div class="config-card-body">
-					<p class="config-hint">添加自定义链接到导航栏，可以选择放到"我的"下拉、"文章"下拉、"联系我"下拉或顶级导航。</p>
-					{#if getCustomLinks().length === 0}
-						<div class="config-empty-hint">
-							<iconify-icon icon="material-symbols:link-off-rounded" style="font-size:32px;opacity:0.3"></iconify-icon>
-							<span>暂无自定义链接，点击"添加"创建</span>
-						</div>
-					{:else}
-						<div class="custom-links-list">
-							{#each getCustomLinks() as link, idx (idx)}
-								{#if !link._deleted}
-									<div class="custom-link-item">
-										<div class="cli-actions">
-											<button class="cli-btn cli-move" onclick={() => moveCustomLink(idx, -1)} disabled={idx === 0} title="上移">
-												<iconify-icon icon="material-symbols:keyboard-arrow-up-rounded"></iconify-icon>
-											</button>
-											<button class="cli-btn cli-move" onclick={() => moveCustomLink(idx, 1)} disabled={idx === getCustomLinks().length - 1} title="下移">
-												<iconify-icon icon="material-symbols:keyboard-arrow-down-rounded"></iconify-icon>
-											</button>
-											<button class="cli-btn cli-delete" onclick={() => removeCustomLink(idx)} title="删除">
-												<iconify-icon icon="material-symbols:delete-outline-rounded"></iconify-icon>
-											</button>
+					<p class="config-hint">
+						完全控制导航栏链接：可以将预设链接（如"关于"、"友链"）移动到任意分组，调整顺序，隐藏不需要的链接，或添加自定义链接。
+						分组：顶级导航（直接显示）| 文章下拉 | 联系我下拉 | 我的下拉 | 已隐藏。
+					</p>
+
+					<div class="nav-groups">
+						{#each ["top", "posts", "contact", "my", "hidden"] as p (p)}
+							<div class="nav-group" data-parent={p}>
+								<div class="nav-group-header" style={`--group-color: ${PARENT_LABELS[p].color}`}>
+									<iconify-icon icon={PARENT_LABELS[p].icon}></iconify-icon>
+									<span class="nav-group-title">{PARENT_LABELS[p].label}</span>
+									<span class="nav-group-count">{getItemsByParent(p).length}</span>
+									<button
+										class="nav-group-add"
+										onclick={() => addCustomNavItem(p)}
+										title="在此分组添加自定义链接"
+									>
+										<iconify-icon icon="material-symbols:add-rounded"></iconify-icon>
+									</button>
+								</div>
+								<div class="nav-group-body">
+									{#if getItemsByParent(p).length === 0}
+										<div class="nav-group-empty">
+											<iconify-icon icon="material-symbols:drag-indicator-rounded" style="opacity:0.3"></iconify-icon>
+											<span>移动链接到这里</span>
 										</div>
-										<div class="cli-fields">
-											<div class="cli-field-row">
-												<div class="form-group cli-field-cli-name">
-													<label>名称 *</label>
-													<input type="text" class="form-input" value={link.name} oninput={(e) => updateCustomLink(idx, "name", (e.target as HTMLInputElement).value)} placeholder="链接名称" />
+									{:else}
+										{#each getItemsByParent(p) as item, gIdx (item.id)}
+											<div class="nav-item" class:nav-item-custom={item.type === "custom"} class:nav-item-disabled={item.type === "preset" && !isPresetEnabled(item.id)}>
+												<div class="nav-item-drag">
+													<iconify-icon icon="material-symbols:drag-indicator-rounded"></iconify-icon>
 												</div>
-												<div class="form-group cli-field-cli-url">
-													<label>URL *</label>
-													<input type="text" class="form-input" value={link.url} oninput={(e) => updateCustomLink(idx, "url", (e.target as HTMLInputElement).value)} placeholder="/path/ 或 https://..." />
+												<div class="nav-item-icon">
+													<iconify-icon icon={getItemIcon(item)}></iconify-icon>
 												</div>
-												<div class="form-group cli-field-cli-parent">
-													<label>位置</label>
-													<select class="form-select" value={link.parent || "my"} onchange={(e) => updateCustomLink(idx, "parent", (e.target as HTMLSelectElement).value)}>
-														<option value="my">我的（下拉）</option>
-														<option value="posts">文章（下拉）</option>
-														<option value="contact">联系我（下拉）</option>
-														<option value="top">顶级导航</option>
+												<div class="nav-item-main">
+													{#if item.type === "preset"}
+														<span class="nav-item-name">{getItemDisplayName(item)}</span>
+														{#if !isPresetEnabled(item.id)}
+															<span class="nav-item-badge nav-item-badge-warn" title="对应页面未在页面开关中启用">
+																<iconify-icon icon="material-symbols:warning-outline-rounded"></iconify-icon>
+																页面未启用
+															</span>
+														{/if}
+														<span class="nav-item-badge">预设</span>
+													{:else}
+														<div class="nav-custom-fields">
+															<input
+																type="text"
+																class="nav-custom-input"
+																value={item.name || ""}
+																oninput={(e) => updateCustomNavItem(item.id, "name", (e.target as HTMLInputElement).value)}
+																placeholder="链接名称"
+															/>
+															<input
+																type="text"
+																class="nav-custom-input"
+																value={item.url || ""}
+																oninput={(e) => updateCustomNavItem(item.id, "url", (e.target as HTMLInputElement).value)}
+																placeholder="/path/ 或 https://..."
+															/>
+															<input
+																type="text"
+																class="nav-custom-input nav-custom-input-sm"
+																value={item.icon || ""}
+																oninput={(e) => updateCustomNavItem(item.id, "icon", (e.target as HTMLInputElement).value)}
+																placeholder="图标 (可选)"
+															/>
+															<label class="nav-custom-check">
+																<input
+																	type="checkbox"
+																	checked={!!item.external}
+																	onchange={(e) => updateCustomNavItem(item.id, "external", (e.target as HTMLInputElement).checked)}
+																/>
+																<span>外链</span>
+															</label>
+														</div>
+													{/if}
+												</div>
+												<div class="nav-item-controls">
+													<select
+														class="nav-parent-select"
+														value={item.parent}
+														onchange={(e) => changeNavItemParent(item.id, (e.target as HTMLSelectElement).value as NavParent)}
+														title="移动到分组"
+													>
+														<option value="top" disabled={item.id === "home"}>顶级导航</option>
+														<option value="posts">文章下拉</option>
+														<option value="contact">联系我下拉</option>
+														<option value="my">我的下拉</option>
+														<option value="hidden" disabled={item.id === "home"}>隐藏</option>
 													</select>
+													<div class="nav-item-btns">
+														<button
+															class="nav-ctrl-btn"
+															onclick={() => moveNavItem(item.id, -1)}
+															disabled={gIdx === 0}
+															title="上移"
+														>
+															<iconify-icon icon="material-symbols:keyboard-arrow-up-rounded"></iconify-icon>
+														</button>
+														<button
+															class="nav-ctrl-btn"
+															onclick={() => moveNavItem(item.id, 1)}
+															disabled={gIdx === getItemsByParent(p).length - 1}
+															title="下移"
+														>
+															<iconify-icon icon="material-symbols:keyboard-arrow-down-rounded"></iconify-icon>
+														</button>
+														{#if item.type === "custom"}
+															<button
+																class="nav-ctrl-btn nav-ctrl-btn-danger"
+																onclick={() => removeCustomNavItem(item.id)}
+																title="删除自定义链接"
+															>
+																<iconify-icon icon="material-symbols:delete-outline-rounded"></iconify-icon>
+															</button>
+														{:else if item.id !== "home"}
+															<button
+																class="nav-ctrl-btn"
+																class:nav-ctrl-btn-active={item.parent === "hidden"}
+																onclick={() => toggleNavItemHidden(item.id)}
+																title={item.parent === "hidden" ? "显示此链接" : "隐藏此链接"}
+															>
+																<iconify-icon icon={item.parent === "hidden" ? "material-symbols:visibility-rounded" : "material-symbols:visibility-off-rounded"}></iconify-icon>
+															</button>
+														{/if}
+													</div>
 												</div>
 											</div>
-											<div class="cli-field-row">
-												<div class="form-group cli-field-cli-icon">
-													<label>图标（Iconify名称，可选）</label>
-													<input type="text" class="form-input" value={link.icon || ""} oninput={(e) => updateCustomLink(idx, "icon", (e.target as HTMLInputElement).value)} placeholder="material-symbols:link" />
-												</div>
-												<label class="form-check-label cli-external-check">
-													<input type="checkbox" class="form-check" checked={link.external || false} onchange={(e) => updateCustomLink(idx, "external", (e.target as HTMLInputElement).checked)} />
-													<span>外部链接</span>
-												</label>
-											</div>
-										</div>
-									</div>
-								{/if}
-							{/each}
-						</div>
-					{/if}
+										{/each}
+									{/if}
+								</div>
+							</div>
+						{/each}
+					</div>
 				</div>
 			</div>
 
@@ -1259,81 +1568,296 @@ ${pagesStr}
 		border: 1.5px dashed var(--border, rgba(0,0,0,0.1));
 	}
 
-	/* 自定义链接列表 */
-	.custom-links-list {
-		display: flex;
-		flex-direction: column;
-		gap: 10px;
-	}
-	.custom-link-item {
+	/* ============ 导航栏链接管理器 ============ */
+	.config-header-actions {
 		display: flex;
 		gap: 8px;
-		padding: 12px;
-		border-radius: 10px;
-		border: 1px solid var(--border, rgba(0,0,0,0.08));
-		background: var(--bg-color, #fafafa);
+		align-items: center;
 	}
-	:global(.dark) .custom-link-item {
-		background: rgba(255,255,255,0.02);
-		border-color: rgba(255,255,255,0.06);
+	.config-btn-secondary {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		padding: 5px 12px;
+		border-radius: 8px;
+		border: 1px solid var(--border, rgba(0,0,0,0.1));
+		background: var(--btn-plain-bg, rgba(0,0,0,0.04));
+		color: var(--text-secondary, #6b7280);
+		font-size: 13px;
+		cursor: pointer;
+		transition: all 0.15s;
+		white-space: nowrap;
 	}
-	.cli-actions {
+	.config-btn-secondary:hover {
+		background: var(--btn-plain-bg-hover, rgba(0,0,0,0.08));
+		color: var(--text-color, #1f2937);
+	}
+
+	.nav-groups {
 		display: flex;
 		flex-direction: column;
+		gap: 16px;
+	}
+	.nav-group {
+		border: 1px solid var(--border, rgba(0,0,0,0.08));
+		border-radius: 12px;
+		overflow: hidden;
+		background: var(--bg-secondary, rgba(0,0,0,0.015));
+	}
+	:global(.dark) .nav-group {
+		border-color: rgba(255,255,255,0.06);
+		background: rgba(255,255,255,0.015);
+	}
+	.nav-group-header {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 10px 14px;
+		background: var(--group-color);
+		color: #fff;
+		font-weight: 600;
+		font-size: 13px;
+	}
+	.nav-group-header iconify-icon {
+		font-size: 18px;
+	}
+	.nav-group-title {
+		flex: 1;
+	}
+	.nav-group-count {
+		background: rgba(255,255,255,0.25);
+		padding: 1px 8px;
+		border-radius: 10px;
+		font-size: 11px;
+		font-weight: 500;
+		min-width: 22px;
+		text-align: center;
+	}
+	.nav-group-add {
+		width: 26px;
+		height: 26px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border: none;
+		border-radius: 6px;
+		background: rgba(255,255,255,0.2);
+		color: #fff;
+		cursor: pointer;
+		font-size: 18px;
+		transition: all 0.15s;
+	}
+	.nav-group-add:hover {
+		background: rgba(255,255,255,0.35);
+	}
+	.nav-group-body {
+		display: flex;
+		flex-direction: column;
+		padding: 6px;
 		gap: 4px;
+		min-height: 40px;
+	}
+	.nav-group-empty {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 6px;
+		padding: 16px;
+		color: var(--text-muted, #9ca3af);
+		font-size: 12px;
+	}
+	.nav-item {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 8px 10px;
+		border-radius: 8px;
+		border: 1px solid transparent;
+		background: var(--bg-color, #fff);
+		transition: all 0.15s;
+	}
+	:global(.dark) .nav-item {
+		background: rgba(255,255,255,0.03);
+	}
+	.nav-item:hover {
+		border-color: var(--border, rgba(0,0,0,0.1));
+		background: var(--bg-hover, rgba(0,0,0,0.02));
+	}
+	:global(.dark) .nav-item:hover {
+		background: rgba(255,255,255,0.05);
+		border-color: rgba(255,255,255,0.1);
+	}
+	.nav-item-custom {
+		border-color: rgba(59,130,246,0.2);
+		background: rgba(59,130,246,0.03);
+	}
+	:global(.dark) .nav-item-custom {
+		border-color: rgba(59,130,246,0.3);
+		background: rgba(59,130,246,0.06);
+	}
+	.nav-item-disabled {
+		opacity: 0.55;
+	}
+	.nav-item-drag {
+		color: var(--text-muted, #9ca3af);
+		cursor: grab;
+		font-size: 18px;
+		display: flex;
+		align-items: center;
 		flex-shrink: 0;
 	}
-	.cli-btn {
+	.nav-item-icon {
+		width: 32px;
+		height: 32px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 8px;
+		background: var(--bg-secondary, rgba(0,0,0,0.04));
+		font-size: 18px;
+		color: var(--text-secondary, #6b7280);
+		flex-shrink: 0;
+	}
+	:global(.dark) .nav-item-icon {
+		background: rgba(255,255,255,0.06);
+	}
+	.nav-item-main {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+	.nav-item-name {
+		font-size: 14px;
+		font-weight: 500;
+		color: var(--text-color, #1f2937);
+	}
+	.nav-item-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 3px;
+		padding: 1px 7px;
+		border-radius: 6px;
+		font-size: 11px;
+		font-weight: 500;
+		background: rgba(0,0,0,0.06);
+		color: var(--text-muted, #6b7280);
+		white-space: nowrap;
+	}
+	:global(.dark) .nav-item-badge {
+		background: rgba(255,255,255,0.08);
+		color: #9ca3af;
+	}
+	.nav-item-badge-warn {
+		background: rgba(245,158,11,0.12);
+		color: #d97706;
+	}
+	:global(.dark) .nav-item-badge-warn {
+		background: rgba(245,158,11,0.15);
+		color: #fbbf24;
+	}
+	.nav-custom-fields {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+		flex: 1;
+		align-items: center;
+	}
+	.nav-custom-input {
+		flex: 1;
+		min-width: 80px;
+		padding: 4px 8px;
+		border: 1px solid var(--border, rgba(0,0,0,0.1));
+		border-radius: 6px;
+		font-size: 12px;
+		background: var(--bg-color, #fff);
+		color: var(--text-color, #1f2937);
+		outline: none;
+		transition: border-color 0.15s;
+	}
+	:global(.dark) .nav-custom-input {
+		background: rgba(0,0,0,0.2);
+		border-color: rgba(255,255,255,0.1);
+		color: #e5e7eb;
+	}
+	.nav-custom-input:focus {
+		border-color: var(--primary, #14b8a6);
+	}
+	.nav-custom-input-sm {
+		flex: 0 0 140px;
+		min-width: 100px;
+	}
+	.nav-custom-check {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		font-size: 12px;
+		color: var(--text-secondary, #6b7280);
+		white-space: nowrap;
+		cursor: pointer;
+		margin: 0 !important;
+	}
+	.nav-custom-check input {
+		width: 14px;
+		height: 14px;
+		accent-color: var(--primary, #14b8a6);
+	}
+	.nav-item-controls {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		flex-shrink: 0;
+	}
+	.nav-parent-select {
+		padding: 4px 6px;
+		border: 1px solid var(--border, rgba(0,0,0,0.1));
+		border-radius: 6px;
+		font-size: 11px;
+		background: var(--bg-color, #fff);
+		color: var(--text-color, #1f2937);
+		cursor: pointer;
+		outline: none;
+	}
+	:global(.dark) .nav-parent-select {
+		background: rgba(0,0,0,0.2);
+		border-color: rgba(255,255,255,0.1);
+		color: #e5e7eb;
+	}
+	.nav-item-btns {
+		display: flex;
+		gap: 2px;
+	}
+	.nav-ctrl-btn {
 		width: 28px;
 		height: 28px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		border-radius: 6px;
 		border: none;
+		border-radius: 6px;
+		background: transparent;
+		color: var(--text-muted, #9ca3af);
 		cursor: pointer;
-		font-size: 16px;
+		font-size: 17px;
 		transition: all 0.15s;
-		background: var(--btn-plain-bg, rgba(0,0,0,0.05));
-		color: var(--text-secondary, #6b7280);
 	}
-	.cli-btn:hover:not(:disabled) {
-		background: var(--btn-plain-bg-hover, rgba(0,0,0,0.1));
+	.nav-ctrl-btn:hover:not(:disabled) {
+		background: var(--btn-plain-bg-hover, rgba(0,0,0,0.08));
 		color: var(--text-color, #1f2937);
 	}
-	.cli-btn:disabled {
-		opacity: 0.3;
+	.nav-ctrl-btn:disabled {
+		opacity: 0.25;
 		cursor: not-allowed;
 	}
-	.cli-delete {
+	.nav-ctrl-btn-danger:hover:not(:disabled) {
+		background: rgba(239,68,68,0.1) !important;
 		color: #ef4444 !important;
 	}
-	.cli-delete:hover:not(:disabled) {
-		background: rgba(239,68,68,0.1) !important;
-	}
-	.cli-fields {
-		flex: 1;
-		min-width: 0;
-	}
-	.cli-field-row {
-		display: flex;
-		gap: 8px;
-		align-items: flex-end;
-		margin-bottom: 8px;
-	}
-	.cli-field-row:last-child {
-		margin-bottom: 0;
-	}
-	.cli-field-cli-name { flex: 2; min-width: 0; }
-	.cli-field-cli-url { flex: 3; min-width: 0; }
-	.cli-field-cli-parent { flex: 0 0 120px; }
-	.cli-field-cli-icon { flex: 1; min-width: 0; }
-	.cli-external-check {
-		margin: 0 !important;
-		margin-top: 18px !important;
-		flex-shrink: 0;
-		padding: 0 4px;
-		white-space: nowrap;
+	.nav-ctrl-btn-active {
+		color: var(--primary, #14b8a6) !important;
+		background: rgba(20,184,166,0.1) !important;
 	}
 
 	/* 页面开关网格 */

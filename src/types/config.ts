@@ -73,14 +73,26 @@ export type SiteConfig = {
 		menuAlign?: "left" | "center"; // 导航菜单对齐方式（仅桌面端菜单）
 		followTheme?: boolean; // 导航栏图标和标题是否跟随主题色
 		stickyNavbar?: boolean; // 导航栏是否固定在顶部始终可见
-		/** 自定义导航链接 */
-		customLinks?: {
-			name: string;
-			url: string;
+		/**
+		 * 自定义导航链接配置（完全控制导航栏链接）
+		 * 每个条目可以是预设链接或自定义链接，指定所属分组和顺序
+		 * parent: "top"顶级导航 | "posts"文章下拉 | "contact"联系我下拉 | "my"我的下拉 | "hidden"隐藏
+		 */
+		navItems?: {
+			/** 唯一标识：预设链接用key（如"home","about","friends"），自定义用"custom-xxx" */
+			id: string;
+			/** 链接类型：preset预设链接，custom自定义链接 */
+			type: "preset" | "custom";
+			/** 所属分组 */
+			parent: "top" | "posts" | "contact" | "my" | "hidden";
+			/** 自定义链接名称（type=custom时必填） */
+			name?: string;
+			/** 自定义链接URL（type=custom时必填） */
+			url?: string;
+			/** 图标（Iconify名称） */
 			icon?: string;
+			/** 是否为外部链接 */
 			external?: boolean;
-			/** 父级菜单: "top"(顶级导航), "posts"(文章下拉), "contact"(联系我下拉), "my"(我的下拉) */
-			parent?: "top" | "posts" | "contact" | "my";
 		}[];
 	};
 
