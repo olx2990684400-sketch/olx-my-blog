@@ -3,7 +3,7 @@
 	import EditToast from "./EditToast.svelte";
 	import { marked } from "marked";
 	import {
-		checkProxyConfigured,
+		hasValidCredentials,
 		showToast,
 		ensureIconify,
 		getRepoFile,
@@ -27,8 +27,7 @@
 	let isPinned = $state(false);
 	let slug = $state("");
 
-	let proxyReady = $state(false);
-	let checkingProxy = $state(false);
+	let authed = $state(false);
 	let saving = $state(false);
 	let loading = $state(false);
 	let editMode = $state(false);
@@ -36,7 +35,6 @@
 	let existingExt = $state<".md" | ".mdx">(".md");
 	let savePath = $state<string>("");
 	let showPreview = $state(false);
-	let showConfigHint = $state(false);
 	let saveSuccess = $state(false);
 
 	// Refs
@@ -416,13 +414,8 @@
 			}
 		}
 
-		checkingProxy = true;
-		proxyReady = await checkProxyConfigured();
-		checkingProxy = false;
-
-		if (!proxyReady) {
-			showToast("GitHub 代理未配置，请联系管理员设置环境变量", "error");
-			showConfigHint = true;
+		if (!hasValidCredentials()) {
+			showToast("请先点击工具栏「导入密钥」按钮导入 GitHub App 私钥", "warning");
 			return;
 		}
 
@@ -692,9 +685,7 @@
 	// ============ Init ============
 	onMount(async () => {
 		ensureIconify();
-		checkingProxy = true;
-		proxyReady = await checkProxyConfigured();
-		checkingProxy = false;
+		authed = hasValidCredentials();
 
 		const params = new URLSearchParams(window.location.search);
 		const pathParam = params.get("path");
@@ -719,7 +710,7 @@
 		</a>
 	</div>
 	<div class="toolbar-right">
-		{#if saveSuccess && proxyReady && editMode}
+		{#if saveSuccess && authed && editMode}
 			<a href={articleUrl} class="toolbar-btn toolbar-view" target="_blank" title="在新窗口预览文章">
 				<iconify-icon icon="material-symbols:open-in-new-rounded" class="text-lg"></iconify-icon>
 				<span class="btn-text">查看文章</span>
@@ -960,67 +951,18 @@
 				</label>
 			</div>
 
-			<div class="sidebar-section proxy-status" onclick={() => (showConfigHint = !showConfigHint)} role="button" tabindex="0">
-				<div class="proxy-indicator">
-					{#if checkingProxy}
-						<iconify-icon icon="material-symbols:progress-activity-rounded" class="text-base animate-spin"></iconify-icon>
-						<span>检测中...</span>
-					{:else if proxyReady}
-						<iconify-icon icon="material-symbols:cloud-done-rounded" class="text-base" style="color:#22c55e"></iconify-icon>
-						<span>GitHub 代理已连接</span>
-					{:else}
-						<iconify-icon icon="material-symbols:cloud-off-rounded" class="text-base" style="color:#f59e0b"></iconify-icon>
-						<span>代理未配置 - 点击查看帮助</span>
-					{/if}
-				</div>
-			</div>
-		</div>
-	</div>
-{/if}
-
-{#if showConfigHint}
-	<div class="hint-overlay" onclick={() => (showConfigHint = false)}>
-		<div class="hint-card" onclick={(e) => e.stopPropagation()}>
-			<div class="hint-header">
-				<h3>
-					<iconify-icon icon="material-symbols:info-outline-rounded" class="text-lg mr-2"></iconify-icon>
-					GitHub 代理配置说明
-				</h3>
-				<button class="hint-close" onclick={() => (showConfigHint = false)}>
-					<iconify-icon icon="material-symbols:close-rounded" class="text-xl"></iconify-icon>
-				</button>
-			</div>
-			<div class="hint-body">
-				<p>
-					在线编辑功能使用 <strong>服务端 GitHub App 代理</strong> 进行认证，无需在浏览器导入密钥。
-					站点管理员需在部署平台添加以下环境变量：
-				</p>
-				<div class="env-table">
-					<div class="env-row env-row-head">
-						<span>变量名</span><span>说明</span>
+			<div class="sidebar-section auth-status-section">
+				{#if authed}
+					<div class="auth-indicator auth-ok">
+						<iconify-icon icon="material-symbols:vpn-key-rounded" class="text-base"></iconify-icon>
+						<span>已导入私钥，可以发布</span>
 					</div>
-					<div class="env-row">
-						<code>GH_APP_ID</code>
-						<span>GitHub App 的数字 ID</span>
+				{:else}
+					<div class="auth-indicator auth-err">
+						<iconify-icon icon="material-symbols:key-off-rounded" class="text-base"></iconify-icon>
+						<span>请在上方工具栏点击「导入密钥」</span>
 					</div>
-					<div class="env-row">
-						<code>GH_PRIVATE_KEY</code>
-						<span>GitHub App 私钥（PEM 格式完整文本，含换行符）</span>
-					</div>
-					<div class="env-row">
-						<code>GH_USER</code>
-						<span>仓库所有者用户名（默认 fqzlr）</span>
-					</div>
-					<div class="env-row">
-						<code>GH_REPO</code>
-						<span>仓库名（默认 my-blog）</span>
-					</div>
-				</div>
-				<p class="hint-note">
-					<iconify-icon icon="material-symbols:lightbulb-outline-rounded" class="text-sm"></iconify-icon>
-					在 Vercel 中：Settings → Environment Variables；在 Cloudflare Pages 中：Settings → Environment Variables。
-					私钥包含换行符，在 Vercel/Cloudflare 环境变量中直接粘贴完整 PEM 文本即可。配置后需重新部署生效。
-				</p>
+				{/if}
 			</div>
 		</div>
 	</div>
@@ -1460,29 +1402,38 @@
 		margin-top: -2px;
 	}
 
-	.proxy-status {
-		padding: 12px;
-		border-radius: 10px;
-		background: var(--bg-secondary, #f9fafb);
-		border: 1px solid var(--border, #e5e7eb);
-		cursor: pointer;
-		transition: all 0.15s;
+	.auth-status-section {
+		margin-top: 8px;
 	}
-	.proxy-status:hover {
-		border-color: hsl(var(--theme-hue, 165), 70%, 50%);
-	}
-	:global(.dark) .proxy-status {
-		background: rgba(255, 255, 255, 0.03);
-		border-color: rgba(255, 255, 255, 0.1);
-	}
-	.proxy-indicator {
+	.auth-indicator {
 		display: flex;
 		align-items: center;
 		gap: 8px;
+		padding: 12px 14px;
+		border-radius: 10px;
 		font-size: 13px;
-		color: var(--text-secondary, #6b7280);
+		font-weight: 500;
 	}
-	:global(.dark) .proxy-indicator { color: #9ca3af; }
+	.auth-ok {
+		background: rgba(34, 197, 94, 0.1);
+		color: #16a34a;
+		border: 1px solid rgba(34, 197, 94, 0.25);
+	}
+	:global(.dark) .auth-ok {
+		background: rgba(74, 222, 128, 0.1);
+		color: #4ade80;
+		border-color: rgba(74, 222, 128, 0.2);
+	}
+	.auth-err {
+		background: rgba(245, 158, 11, 0.1);
+		color: #d97706;
+		border: 1px solid rgba(245, 158, 11, 0.25);
+	}
+	:global(.dark) .auth-err {
+		background: rgba(251, 191, 36, 0.1);
+		color: #fbbf24;
+		border-color: rgba(251, 191, 36, 0.2);
+	}
 
 	.loading-state {
 		display: flex;
@@ -1495,85 +1446,6 @@
 		color: var(--text-secondary, #6b7280);
 		font-size: 14px;
 	}
-
-	/* ===== Config hint modal ===== */
-	.hint-overlay {
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.5);
-		backdrop-filter: blur(4px);
-		z-index: 200;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 20px;
-		animation: fadeIn 0.2s ease;
-	}
-	@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-	.hint-card {
-		background: var(--card-bg, white);
-		border-radius: 16px;
-		width: 100%;
-		max-width: 520px;
-		box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-		animation: slideUp 0.25s ease;
-		overflow: hidden;
-		border: 1px solid var(--border, rgba(0,0,0,0.08));
-	}
-	@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-	:global(.dark) .hint-card { background: #1a1a2e; border-color: rgba(255,255,255,0.1); }
-	.hint-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 16px 20px 12px;
-		border-bottom: 1px solid var(--border, rgba(0,0,0,0.08));
-	}
-	:global(.dark) .hint-header { border-bottom-color: rgba(255,255,255,0.1); }
-	.hint-header h3 {
-		margin: 0; font-size: 16px; font-weight: 700;
-		display: flex; align-items: center; color: var(--text-color, #1a1a2e);
-	}
-	:global(.dark) .hint-header h3 { color: #f0f0f0; }
-	.hint-close {
-		width: 30px; height: 30px; border-radius: 8px; border: none; background: transparent;
-		cursor: pointer; display: flex; align-items: center; justify-content: center;
-		color: #888; transition: all 0.15s;
-	}
-	.hint-close:hover { background: rgba(0,0,0,0.06); color: #333; }
-	:global(.dark) .hint-close:hover { background: rgba(255,255,255,0.1); color: #fff; }
-	.hint-body { padding: 16px 20px; font-size: 13px; line-height: 1.7; color: var(--text-secondary, #555); }
-	:global(.dark) .hint-body { color: #bbb; }
-	.hint-body p { margin: 0 0 12px; }
-	.hint-body strong { color: hsl(var(--theme-hue,165),70%,45%); }
-	.env-table {
-		border: 1px solid var(--border, rgba(0,0,0,0.1));
-		border-radius: 10px; overflow: hidden; margin: 12px 0;
-	}
-	:global(.dark) .env-table { border-color: rgba(255,255,255,0.1); }
-	.env-row {
-		display: grid; grid-template-columns: 160px 1fr; gap: 12px;
-		padding: 10px 14px; align-items: center;
-	}
-	.env-row + .env-row { border-top: 1px solid var(--border, rgba(0,0,0,0.06)); }
-	:global(.dark) .env-row + .env-row { border-top-color: rgba(255,255,255,0.06); }
-	.env-row-head {
-		font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;
-		background: var(--bg-secondary, rgba(0,0,0,0.03)); color: var(--text-color,#333);
-	}
-	:global(.dark) .env-row-head { background: rgba(255,255,255,0.04); color: #ddd; }
-	.env-row code {
-		font-family: "SF Mono","Fira Code",monospace; font-size: 12px; padding: 3px 8px;
-		border-radius: 5px; background: hsla(var(--theme-hue,165),70%,50%,0.08);
-		color: hsl(var(--theme-hue,165),70%,40%); font-weight: 600;
-	}
-	:global(.dark) .env-row code { color: hsl(var(--theme-hue,165),70%,60%); background: hsla(var(--theme-hue,165),70%,50%,0.12); }
-	.hint-note {
-		display: flex; align-items: flex-start; gap: 6px; margin: 12px 0 0 !important;
-		padding: 10px 12px; border-radius: 8px;
-		background: rgba(245,158,11,0.08); color: #92400e; font-size: 12px;
-	}
-	:global(.dark) .hint-note { background: rgba(251,191,36,0.1); color: #fbbf24; }
 
 	@media (max-width: 768px) {
 		.write-container { flex-direction: column; min-height: 50vh; }

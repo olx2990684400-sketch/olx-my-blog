@@ -1,98 +1,301 @@
 /**
  * 在线编辑模式 - 核心工具库
- * 使用服务端代理进行 GitHub API 认证：
- * 1. 私钥和 App ID 存储在服务器环境变量（Vercel/Cloudflare）
- * 2. 所有 GitHub API 请求通过 /api/github 代理转发
- * 3. 代理服务器自动处理 JWT 签名和安装令牌刷新
+ * 前端导入 GitHub App 私钥认证：
+ * 1. 用户在浏览器导入 .pem 私钥文件并输入 App ID
+ * 2. 浏览器端使用 Web Crypto API 进行 JWT 签名
+ * 3. 通过 /api/github 代理转发请求（解决CORS问题）
+ * 4. 私钥仅保存在浏览器内存/localStorage中，不上传服务器
  */
 
 import { repoConfig } from "@/config/editConfig";
 
 const PROXY_URL = "/api/github";
+const STORAGE_APP_ID = "gh_app_id";
+const STORAGE_PRIVATE_KEY = "gh_private_key";
 
-let proxyConfigured: boolean | null = null;
+let cachedInstallationToken: string | null = null;
+let tokenExpiresAt = 0;
 
-export async function checkProxyConfigured(): Promise<boolean> {
-	if (proxyConfigured !== null) return proxyConfigured;
-	try {
-		const resp = await fetch(PROXY_URL, { method: "GET" });
-		const data = await resp.json();
-		proxyConfigured = data.configured === true;
-		return proxyConfigured;
-	} catch {
-		proxyConfigured = false;
-		return false;
+function strToBuf(str: string): ArrayBuffer {
+	return new TextEncoder().encode(str);
+}
+
+function b64urlEncode(buf: ArrayBuffer): string {
+	const bytes = new Uint8Array(buf);
+	let binary = "";
+	for (let i = 0; i < bytes.byteLength; i++) {
+		binary += String.fromCharCode(bytes[i]);
 	}
+	return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-export function invalidateProxyCheck(): void {
-	proxyConfigured = null;
+function b64urlDecode(str: string): ArrayBuffer {
+	const b64 = str.replace(/-/g, "+").replace(/_/g, "/");
+	const pad = b64.length % 4;
+	const padded = pad ? b64 + "=".repeat(4 - pad) : b64;
+	const binary = atob(padded);
+	const bytes = new Uint8Array(binary.length);
+	for (let i = 0; i < binary.length; i++) {
+		bytes[i] = binary.charCodeAt(i);
+	}
+	return bytes.buffer;
 }
 
-// ============ 兼容旧的凭据管理 API（不再需要本地存储） ============
+function pkcs1ToPkcs8(pkcs1Der: ArrayBuffer): ArrayBuffer {
+	const bytes = new Uint8Array(pkcs1Der);
+	const rsaOid = new Uint8Array([0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00]);
+	const algorithmIdentifier = new Uint8Array(2 + rsaOid.length);
+	algorithmIdentifier[0] = 0x30;
+	algorithmIdentifier[1] = rsaOid.length;
+	algorithmIdentifier.set(rsaOid, 2);
 
-export function getStoredAppId(): string {
-	return "";
+	function wrapDer(tag: number, data: Uint8Array): Uint8Array {
+		const len = data.length;
+		let lenBytes: Uint8Array;
+		if (len < 128) {
+			lenBytes = new Uint8Array([len]);
+		} else if (len < 256) {
+			lenBytes = new Uint8Array([0x81, len]);
+		} else {
+			lenBytes = new Uint8Array([0x82, (len >> 8) & 0xff, len & 0xff]);
+		}
+		const result = new Uint8Array(1 + lenBytes.length + len);
+		result[0] = tag;
+		result.set(lenBytes, 1);
+		result.set(data, 1 + lenBytes.length);
+		return result;
+	}
+
+	const wrappedKey = wrapDer(0x04, bytes);
+	const inner = new Uint8Array(algorithmIdentifier.length + wrappedKey.length);
+	inner.set(algorithmIdentifier, 0);
+	inner.set(wrappedKey, algorithmIdentifier.length);
+	const pkcs8 = wrapDer(0x30, inner);
+	return pkcs8.buffer;
 }
 
-export function setStoredAppId(_appId: string): void {
-	// no-op: 凭据已在服务端配置
+function pemToDer(pem: string): ArrayBuffer {
+	const cleaned = pem
+		.replace(/-----BEGIN (RSA )?PRIVATE KEY-----/, "")
+		.replace(/-----END (RSA )?PRIVATE KEY-----/, "")
+		.replace(/\s+/g, "");
+	return b64urlDecode(cleaned);
 }
 
-export function getStoredPrivateKey(): string {
-	return "";
+async function importPrivateKey(pem: string): Promise<CryptoKey> {
+	let der = pemToDer(pem);
+	const header = new Uint8Array(der, 0, 2);
+	let keyData: ArrayBuffer;
+	if (header[0] === 0x30 && header[1] === 0x82) {
+		const versionOctet = new Uint8Array(der, 3, 1)[0];
+		if (versionOctet === 0x01 || versionOctet === 0x00) {
+			const seqLen = (new Uint8Array(der, 1, 2)[0] << 8) | new Uint8Array(der, 2, 2)[0];
+			const nextByte = new Uint8Array(der, 4, 1)[0];
+			if (nextByte === 0x02) {
+				keyData = pkcs1ToPkcs8(der);
+			} else {
+				keyData = der;
+			}
+		} else {
+			keyData = der;
+		}
+	} else {
+		keyData = der;
+	}
+	return crypto.subtle.importKey(
+		"pkcs8",
+		keyData,
+		{ name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+		false,
+		["sign"],
+	);
 }
 
-export function setStoredPrivateKey(_pem: string): void {
-	// no-op: 凭据已在服务端配置
+async function signJwt(appId: string, privateKeyPem: string): Promise<string> {
+	const now = Math.floor(Date.now() / 1000);
+	const header = { alg: "RS256", typ: "JWT" };
+	const payload = { iat: now - 60, exp: now + 8 * 60, iss: appId };
+	const enc = (obj: unknown) => b64urlEncode(strToBuf(JSON.stringify(obj)));
+	const signingInput = `${enc(header)}.${enc(payload)}`;
+	const key = await importPrivateKey(privateKeyPem);
+	const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, strToBuf(signingInput));
+	return `${signingInput}.${b64urlEncode(signature)}`;
 }
 
-export function clearStoredCredentials(): void {
-	invalidateProxyCheck();
+async function rawProxy(
+	method: string,
+	apiPath: string,
+	body: unknown,
+	headers: Record<string, string>,
+): Promise<Response> {
+	return fetch(PROXY_URL, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ path: apiPath, method, headers, body }),
+	});
 }
 
-export function hasValidCredentials(): boolean {
-	return proxyConfigured === true;
-}
-
-export function hasValidToken(): boolean {
-	return proxyConfigured === true;
-}
-
-export function getStoredToken(): string {
-	return "";
-}
-
-export function setStoredToken(_token: string): void {
-	// no-op
-}
-
-export function clearStoredToken(): void {
-	invalidateProxyCheck();
-}
-
-export async function validateCredentials(_appId?: string, _pem?: string): Promise<{ ok: boolean; error?: string }> {
-	const ok = await checkProxyConfigured();
-	if (ok) return { ok: true };
+async function getInstallationToken(jwt: string): Promise<{ token: string; expiresAt: number }> {
+	const authHeaders = {
+		Authorization: `Bearer ${jwt}`,
+		Accept: "application/vnd.github+json",
+		"X-GitHub-Api-Version": "2022-11-28",
+	};
+	const resp = await rawProxy("GET", "app/installations", undefined, authHeaders);
+	if (!resp.ok) {
+		const text = await resp.text().catch(() => "");
+		throw new Error(`获取 Installation 列表失败 (${resp.status}): ${text}`);
+	}
+	const installations = await resp.json();
+	let installationId: number | null = null;
+	const ghUser = repoConfig.owner;
+	const ghRepo = repoConfig.repo;
+	for (const inst of installations) {
+		if (inst.account && (inst.account.login === ghUser)) {
+			installationId = inst.id;
+			break;
+		}
+	}
+	if (!installationId && Array.isArray(installations) && installations.length > 0) {
+		installationId = installations[0].id;
+	}
+	if (!installationId) {
+		const resp2 = await rawProxy(
+			"GET",
+			`repos/${ghUser}/${ghRepo}/installation`,
+			undefined,
+			authHeaders,
+		);
+		if (resp2.ok) {
+			const data = await resp2.json();
+			installationId = data.id;
+		}
+	}
+	if (!installationId) {
+		throw new Error("未找到 GitHub App Installation，请确认 App 已安装到目标仓库");
+	}
+	const tokenResp = await rawProxy(
+		"POST",
+		`app/installations/${installationId}/access_tokens`,
+		{},
+		authHeaders,
+	);
+	if (!tokenResp.ok) {
+		const text = await tokenResp.text().catch(() => "");
+		throw new Error(`获取 Installation Token 失败 (${tokenResp.status}): ${text}`);
+	}
+	const data = await tokenResp.json();
 	return {
-		ok: false,
-		error: "后端 GitHub 代理未配置，请在部署平台设置 GH_APP_ID 和 GH_PRIVATE_KEY 环境变量",
+		token: data.token,
+		expiresAt: new Date(data.expires_at).getTime() - 60_000,
 	};
 }
 
-// ============ 代理请求封装 ============
+export async function getAuthToken(): Promise<string | null> {
+	const appId = getStoredAppId();
+	const privateKey = getStoredPrivateKey();
+	if (!appId || !privateKey) return null;
+	const now = Date.now();
+	if (cachedInstallationToken && now < tokenExpiresAt) {
+		return cachedInstallationToken;
+	}
+	try {
+		const jwt = await signJwt(appId, privateKey);
+		const { token, expiresAt } = await getInstallationToken(jwt);
+		cachedInstallationToken = token;
+		tokenExpiresAt = expiresAt;
+		return token;
+	} catch (e) {
+		console.error("获取 GitHub Token 失败:", e);
+		clearStoredCredentials();
+		return null;
+	}
+}
+
+export function invalidateToken(): void {
+	cachedInstallationToken = null;
+	tokenExpiresAt = 0;
+}
+
+// ============ 凭据管理 ============
+
+export function getStoredAppId(): string {
+	try {
+		return localStorage.getItem(STORAGE_APP_ID) || "";
+	} catch {
+		return "";
+	}
+}
+
+export function setStoredAppId(appId: string): void {
+	try {
+		localStorage.setItem(STORAGE_APP_ID, appId);
+	} catch {}
+}
+
+export function getStoredPrivateKey(): string {
+	try {
+		return localStorage.getItem(STORAGE_PRIVATE_KEY) || "";
+	} catch {
+		return "";
+	}
+}
+
+export function setStoredPrivateKey(pem: string): void {
+	try {
+		localStorage.setItem(STORAGE_PRIVATE_KEY, pem);
+	} catch {}
+}
+
+export function clearStoredCredentials(): void {
+	try {
+		localStorage.removeItem(STORAGE_APP_ID);
+		localStorage.removeItem(STORAGE_PRIVATE_KEY);
+	} catch {}
+	cachedInstallationToken = null;
+	tokenExpiresAt = 0;
+}
+
+export function hasValidCredentials(): boolean {
+	return !!getStoredAppId() && !!getStoredPrivateKey();
+}
+
+export function hasValidToken(): boolean {
+	return cachedInstallationToken !== null && Date.now() < tokenExpiresAt;
+}
+
+export async function validateCredentials(appId?: string, pem?: string): Promise<{ ok: boolean; error?: string }> {
+	const useAppId = appId || getStoredAppId();
+	const usePem = pem || getStoredPrivateKey();
+	if (!useAppId || !usePem) {
+		return { ok: false, error: "请先导入 GitHub App 私钥文件并填写 App ID" };
+	}
+	try {
+		const jwt = await signJwt(useAppId, usePem);
+		const { token } = await getInstallationToken(jwt);
+		cachedInstallationToken = token;
+		return { ok: true };
+	} catch (e: any) {
+		return { ok: false, error: e?.message || "验证失败，请检查 App ID 和私钥是否正确" };
+	}
+}
+
+// ============ 代理请求封装（CORS透传，带auth header） ============
 
 async function proxyRequest(
 	method: string,
 	apiPath: string,
 	body?: unknown,
+	extraHeaders?: Record<string, string>,
 ): Promise<Response> {
-	const resp = await fetch(PROXY_URL, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ path: apiPath, method, body }),
-	});
-	return resp;
+	const token = await getAuthToken();
+	const headers: Record<string, string> = {
+		Accept: "application/vnd.github+json",
+		"X-GitHub-Api-Version": "2022-11-28",
+	};
+	if (token) headers.Authorization = `Bearer ${token}`;
+	if (extraHeaders) Object.assign(headers, extraHeaders);
+	return rawProxy(method, apiPath, body, headers);
 }
 
 export async function githubApi(
@@ -101,6 +304,31 @@ export async function githubApi(
 	body?: unknown,
 ): Promise<Response> {
 	return proxyRequest(method, apiPath, body);
+}
+
+// ============ 兼容旧API ============
+
+export function getStoredToken(): string {
+	return cachedInstallationToken || "";
+}
+
+export function setStoredToken(_token: string): void {}
+
+export function clearStoredToken(): void {
+	invalidateToken();
+}
+
+export async function validateToken(_token?: string): Promise<boolean> {
+	const result = await validateCredentials();
+	return result.ok;
+}
+
+export async function checkProxyConfigured(): Promise<boolean> {
+	return hasValidCredentials();
+}
+
+export function invalidateProxyCheck(): void {
+	invalidateToken();
 }
 
 // ============ 文件读取工具 ============
@@ -140,10 +368,10 @@ export async function writeGistFile(
 		const resp = await proxyRequest("PATCH", `gists/${gistId}`, {
 			files: { [fileName]: { content } },
 		});
-		if (!resp.ok) invalidateProxyCheck();
+		if (!resp.ok) invalidateToken();
 		return resp.ok;
 	} catch {
-		invalidateProxyCheck();
+		invalidateToken();
 		return false;
 	}
 }
@@ -209,10 +437,10 @@ export async function updateRepoFile(
 			sha,
 			branch: config.branch,
 		});
-		if (!resp.ok) invalidateProxyCheck();
+		if (!resp.ok) invalidateToken();
 		return resp.ok;
 	} catch {
-		invalidateProxyCheck();
+		invalidateToken();
 		return false;
 	}
 }
@@ -230,10 +458,10 @@ export async function createRepoFile(
 			content: encodedContent,
 			branch: config.branch,
 		});
-		if (!resp.ok) invalidateProxyCheck();
+		if (!resp.ok) invalidateToken();
 		return resp.ok;
 	} catch {
-		invalidateProxyCheck();
+		invalidateToken();
 		return false;
 	}
 }
@@ -250,10 +478,10 @@ export async function deleteRepoFile(
 			sha,
 			branch: config.branch,
 		});
-		if (!resp.ok) invalidateProxyCheck();
+		if (!resp.ok) invalidateToken();
 		return resp.ok;
 	} catch {
-		invalidateProxyCheck();
+		invalidateToken();
 		return false;
 	}
 }
@@ -284,7 +512,7 @@ export async function uploadImageToRepo(
 			});
 		}
 		if (!resp.ok) {
-			invalidateProxyCheck();
+			invalidateToken();
 			const text = await resp.text().catch(() => "");
 			throw new Error(`上传失败 (${resp.status}): ${text}`);
 		}
@@ -293,10 +521,6 @@ export async function uploadImageToRepo(
 		console.error("图片上传失败:", e);
 		return null;
 	}
-}
-
-export async function validateToken(_token?: string): Promise<boolean> {
-	return checkProxyConfigured();
 }
 
 // ============ Toast 通知 ============

@@ -5,5 +5,5 @@ export const config = {
 };
 
 export default async function handler(request) {
-	return handleGithubProxy(request, process.env);
+	return handleGithubProxy(request);
 }
