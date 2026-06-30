@@ -5,5 +5,12 @@ export const config = {
 };
 
 export default async function handler(request) {
-	return handleGithubProxy(request);
+	// Vercel Edge: 通过 process.env 传递环境变量给代理
+	const env = {
+		GH_APP_ID: process.env.GH_APP_ID || "",
+		GH_PRIVATE_KEY: process.env.GH_PRIVATE_KEY || "",
+		GH_USER: process.env.GH_USER || "",
+		GH_REPO: process.env.GH_REPO || "",
+	};
+	return handleGithubProxy(request, env);
 }
