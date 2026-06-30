@@ -2,7 +2,7 @@
  * 鍦ㄧ嚎缂栬緫妯″紡 - 鏍稿績宸ュ叿搴�
  * 鍓嶇�瀵煎叆 GitHub App 绉侀挜璁よ瘉锛�
  * 1. 鐢ㄦ埛鍦ㄦ祻瑙堝櫒瀵煎叆 .pem 绉侀挜鏂囦欢骞惰緭鍏� App ID
- * 2. 娴忚�鍣ㄧ�浣跨敤 Web Crypto API 杩涜� JWT 绛惧悕
+ * 2. 娴忚�鍣ㄧ�浣跨敤 Web Crypto API 杩涜� JWT 绞惧悕
  * 3. 閫氳繃 /api/github 浠ｇ悊杞�彂璇锋眰锛堣В鍐矯ORS闂��锛�
  * 4. 绉侀挜浠呬繚瀛樺湪娴忚�鍣ㄥ唴瀛�/localStorage涓�紝涓嶄笂浼犳湇鍔″櫒
  */
@@ -236,7 +236,7 @@ export function invalidateToken(): void {
 	tokenExpiresAt = 0;
 }
 
-// ============ 鍑�嵁绠＄悊 ============
+// ============ 鍑�ERCHANTABILITY ============
 
 export function getStoredAppId(): string {
 	try {
@@ -823,19 +823,20 @@ export function registerSubmitHandler(pageKey: string, handler: SubmitHandler): 
 	submitHandlers.set(pageKey, handler);
 }
 
-export async function submitAllDrafts(): Promise<{ success: number; failed: number; errors: string[] }> {
+export async function submitAllDrafts(): Promise<{ success: number; failed: number; errors: string[]; submittedPageKeys: Set<string> }> {
 	const token = await getAuthToken();
 	if (!token) {
-		return { success: 0, failed: 0, errors: ["鏈��璇侊紝璇峰厛瀵煎叆绉侀挜"] };
+		return { success: 0, failed: 0, errors: ["未认证，请先导入私钥"], submittedPageKeys: new Set() };
 	}
 	const drafts = getAllDrafts();
 	const success: string[] = [];
 	const errors: string[] = [];
 	const toRemove: string[] = [];
+	const submittedPageKeys = new Set<string>();
 	for (const draft of drafts) {
 		const handler = submitHandlers.get(draft.pageKey);
 		if (!handler) {
-			errors.push(`${draft.pageName}: 鏆備笉鏀�寔鎻愪氦`);
+			errors.push(`${draft.pageName}: 暂不支持提交`);
 			continue;
 		}
 		try {
@@ -843,11 +844,12 @@ export async function submitAllDrafts(): Promise<{ success: number; failed: numb
 			if (ok) {
 				success.push(draft.id);
 				toRemove.push(draft.id);
+				submittedPageKeys.add(draft.pageKey);
 			} else {
-				errors.push(`${draft.description}: 鎻愪氦澶辫触`);
+				errors.push(`${draft.description}: 提交失败`);
 			}
 		} catch (e: any) {
-			errors.push(`${draft.description}: ${e?.message || "鏈�煡閿欒�"}`);
+			errors.push(`${draft.description}: ${e?.message || "未知错误"}`);
 		}
 	}
 	if (toRemove.length > 0) {
@@ -855,7 +857,7 @@ export async function submitAllDrafts(): Promise<{ success: number; failed: numb
 		store.changes = store.changes.filter(c => !toRemove.includes(c.id));
 		writeDraftStore(store);
 	}
-	return { success: success.length, failed: errors.length, errors };
+	return { success: success.length, failed: errors.length, errors, submittedPageKeys };
 }
 
 export function onDraftsChanged(callback: (count: number) => void): () => void {
