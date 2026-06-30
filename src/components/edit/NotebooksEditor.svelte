@@ -12,6 +12,9 @@
     deleteRepoFile,
     genId,
     deepClone,
+    saveDraft,
+    getDraft,
+    deleteDraft,
   } from "@/utils/editMode";
   import { repoConfig } from "@/config/editConfig";
 
@@ -37,6 +40,16 @@
   onMount(() => {
     ensureIconify();
     collectFromDOM();
+    const draft = getDraft<any>("notebooks");
+    if (draft?.notebooks) {
+      if (confirm("发现未提交的笔记本草稿，是否恢复？")) {
+        notebooks = draft.notebooks;
+        hasChanges = true;
+        showToast("草稿已恢复", "success");
+      } else { deleteDraft("notebooks"); }
+    }
+    window.addEventListener("blog:batch-submit", handleBatchSubmit);
+    return () => window.removeEventListener("blog:batch-submit", handleBatchSubmit);
   });
 
   function collectFromDOM() {
@@ -173,6 +186,15 @@
     return JSON.stringify(obj, null, "\t") + "\n";
   }
 
+  function handleSaveDraft() {
+    saveDraft("notebooks", "笔记本", { notebooks }, `共 ${notebooks.length} 个笔记本`);
+    showToast("笔记本草稿已保存", "success");
+  }
+  async function handleBatchSubmit() {
+    const draft = getDraft<any>("notebooks");
+    if (draft?.notebooks) { notebooks = draft.notebooks; await handleSave(); if (!saving) deleteDraft("notebooks"); }
+  }
+
   async function handleSave() {
     if (!hasValidToken()) { showToast("GitHub 代理未配置，请联系管理员", "warning"); return; }
     saving = true;
@@ -237,7 +259,7 @@
     mountTo=".page-header-toolbar-slot"
     {saving} {hasChanges}
     on:modeChange={(e) => handleModeChange(e)}
-    on:add={handleAdd} on:save={handleSave} on:cancel={handleCancel}
+    on:add={handleAdd} on:save={handleSave} on:saveDraft={() => handleSaveDraft()} on:cancel={handleCancel}
   />
 </div>
 

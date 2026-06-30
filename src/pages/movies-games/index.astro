@@ -214,6 +214,21 @@ for (const tc of tabConfig) {
 }
 
 const activeTab = sections[0]?.tabKey || "all";
+
+// 转换为 BangumiEditor 可用的初始数据
+const subjectTypeToCategory: Record<number, string> = { 2: "anime", 4: "game", 6: "real" };
+const bangumiInitialItems = mgItems.map((item) => ({
+	id: String(item.subject_id || item.link),
+	title: item.subject.name,
+	name_cn: item.subject.name_cn || item.subject.name,
+	category: subjectTypeToCategory[item.subject_type] || "anime",
+	status: item.type,
+	score: item.rate || 0,
+	image: item.subject.images?.medium || "",
+	tags: item.tags || [],
+	comment: item.comment || "",
+	updated_at: item.updated_at,
+}));
 ---
 
 <MainGridLayout title={i18n(I18nKey.moviesGamesTitle)} description={i18n(I18nKey.moviesGamesSubtitle)}>
@@ -248,9 +263,11 @@ const activeTab = sections[0]?.tabKey || "all";
 					defaultCategory="all"
 					skipDomCollect={true}
 					customPageName="影视游戏"
+					initialItems={bangumiInitialItems}
 				/>
 			</div>
 
+			<div class="bangumi-section">
 			{mgItems.length > 0 ? (
 				<>
 					<!-- Tab Navigation -->
@@ -340,6 +357,7 @@ const activeTab = sections[0]?.tabKey || "all";
 					</h3>
 				</div>
 			)}
+			</div>
 		</div>
 	</div>
 <Comment customPath="/movies-games/" />

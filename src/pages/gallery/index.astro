@@ -3,7 +3,7 @@ import Icon from "@components/common/Icon.astro";
 import PageTitle from "@/components/common/PageTitle.astro";
 import AlbumCard from "@/components/pages/gallery/AlbumCard.astro";
 import NetworkAlbum from "@/components/pages/gallery/NetworkAlbum.svelte";
-import FileCodeEditor from "@/components/edit/FileCodeEditor.svelte";
+import GalleryEditor from "@/components/edit/GalleryEditor.svelte";
 import { galleryConfig, siteConfig } from "@/config";
 import I18nKey from "@/i18n/i18nKey";
 import { i18n } from "@/i18n/translation";
@@ -24,6 +24,18 @@ const albums = galleryConfig.albums.map((album) => {
 });
 
 const allTags = [...new Set(albums.flatMap((a) => a.tags || []))].sort();
+
+// 转换为 GalleryEditor 可用的初始数据
+const galleryInitialAlbums = albums.map((album) => ({
+	id: album.id,
+	name: album.name,
+	description: album.description || "",
+	location: album.location || "",
+	date: album.date || "",
+	tags: album.tags || [],
+	cover: typeof album.cover === "string" ? album.cover : "",
+	photoCount: album.photoCount || 0,
+}));
 
 const tabs = [
 	{
@@ -50,13 +62,14 @@ const tabs = [
       </div>
 
       <div data-no-swup>
-        <FileCodeEditor
+        <GalleryEditor
           client:only
-          filePath="src/config/galleryConfig.ts"
-          pageName="相册页面"
+          initialAlbums={galleryInitialAlbums}
+          pageName="相册"
         />
       </div>
 
+      <div class="gallery-ssr-content">
       <div class="border-b border-(--line-divider) mb-3 relative">
         <div class="overflow-x-auto" data-tab-scroll-container>
           <nav class="flex min-w-max space-x-8" aria-label="Gallery Tabs" data-gallery-tab-nav>
@@ -129,6 +142,7 @@ const tabs = [
 
       <div data-gallery-section="network" class="hidden">
         <NetworkAlbum client:visible />
+      </div>
       </div>
     </div>
   </div>

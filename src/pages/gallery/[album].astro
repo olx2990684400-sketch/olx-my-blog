@@ -7,6 +7,7 @@ import { i18n } from "@/i18n/translation";
 import MainGridLayout from "@/layouts/MainGridLayout.astro";
 import { getAlbumCover, scanAlbumPhotos } from "@/utils/gallery-utils";
 import { url } from "@/utils/url-utils";
+import AlbumPhotoManager from "@/components/edit/AlbumPhotoManager.svelte";
 
 // 检查页面是否启用
 if (!siteConfig.pages.gallery) {
@@ -122,7 +123,7 @@ const columnWidth = galleryConfig.columnWidth || 240;
 
   <!-- 瀑布流照片网格 -->
   <div class="w-full rounded-(--radius-large) overflow-hidden relative mt-4">
-    <div class="card-base z-10 px-6 py-6 relative w-full">
+    <div class="card-base z-10 px-6 py-6 relative w-full gallery-photo-ssr">
       {photos.length > 0 ? (
         <div
           class="gallery-masonry"
@@ -138,6 +139,28 @@ const columnWidth = galleryConfig.columnWidth || 240;
           <p class="text-lg">{i18n(I18nKey.galleryNoAlbums)}</p>
         </div>
       )}
+    </div>
+  </div>
+
+  <!-- 样式已迁移至 src/styles/pages/gallery.css -->
+  <!-- 照片管理编辑器 -->
+  <div class="w-full rounded-(--radius-large) overflow-hidden relative mt-4">
+    <div class="card-base z-10 px-6 py-4 relative w-full">
+      <div class="flex justify-between items-start gap-4 flex-wrap mb-2">
+        <div class="flex-1 min-w-0">
+          <h2 class="text-lg font-semibold text-neutral-800 dark:text-neutral-200">照片管理</h2>
+          <p class="text-xs text-neutral-400 dark:text-neutral-500 mt-0.5">拖拽排序 · 批量删除 · 设置封面</p>
+        </div>
+        <div class="page-header-toolbar-slot flex-shrink-0"></div>
+      </div>
+      <div data-no-swup>
+        <AlbumPhotoManager
+          client:only
+          photos={photos}
+          albumId={albumMeta.id}
+          albumName={albumMeta.name}
+        />
+      </div>
     </div>
   </div>
 

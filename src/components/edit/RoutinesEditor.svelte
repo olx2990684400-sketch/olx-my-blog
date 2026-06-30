@@ -13,6 +13,9 @@
     deleteRepoFile,
     genId,
     deepClone,
+    saveDraft,
+    getDraft,
+    deleteDraft,
   } from "@/utils/editMode";
   import { repoConfig } from "@/config/editConfig";
 
@@ -44,6 +47,16 @@
   onMount(() => {
     ensureIconify();
     collectFromDOM();
+    const draft = getDraft<any>("routines");
+    if (draft?.routines) {
+      if (confirm("发现未提交的日常规划草稿，是否恢复？")) {
+        routines = draft.routines;
+        hasChanges = true;
+        showToast("草稿已恢复", "success");
+      } else { deleteDraft("routines"); }
+    }
+    window.addEventListener("blog:batch-submit", handleBatchSubmit);
+    return () => window.removeEventListener("blog:batch-submit", handleBatchSubmit);
   });
 
   function htmlToMarkdown(html: string): string {
@@ -227,6 +240,15 @@
     return lines.join("\n");
   }
 
+  function handleSaveDraft() {
+    saveDraft("routines", "日常规划", { routines }, `共 ${routines.length} 条规划`);
+    showToast("日常规划草稿已保存", "success");
+  }
+  async function handleBatchSubmit() {
+    const draft = getDraft<any>("routines");
+    if (draft?.routines) { routines = draft.routines; await handleSave(); if (!saving) deleteDraft("routines"); }
+  }
+
   async function handleSave() {
     if (!hasValidToken()) { showToast("GitHub 代理未配置，请联系管理员", "warning"); return; }
     saving = true;
@@ -277,7 +299,7 @@
     mountTo=".page-header-toolbar-slot"
     {saving} {hasChanges}
     on:modeChange={(e) => handleModeChange(e)}
-    on:add={handleAdd} on:save={handleSave} on:cancel={handleCancel}
+    on:add={handleAdd} on:save={handleSave} on:saveDraft={() => handleSaveDraft()} on:cancel={handleCancel}
   />
 </div>
 

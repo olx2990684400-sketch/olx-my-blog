@@ -3,28 +3,20 @@
 	import EditToast from "./EditToast.svelte";
 	import { marked } from "marked";
 	import {
-		hasValidCredentials,
+		checkProxyConfigured,
 		showToast,
 		ensureIconify,
 		getRepoFile,
 		createRepoFile,
 		updateRepoFile,
 		readFileAsText,
-		getStoredAppId,
-		setStoredAppId,
-		getStoredPrivateKey,
-		setStoredPrivateKey,
-		clearStoredCredentials,
-		validateCredentials,
-		invalidateToken,
 		saveDraft,
-		getDraftCount,
-		getDraftsByPage,
-		removeDraft,
-		clearDraftsByPage,
-		registerSubmitHandler,
-		submitAllDrafts,
+		getDraft,
+		deleteDraft,
+		hasAnyDrafts,
+		importPemFile,
 		onDraftsChanged,
+		getClientKey,
 	} from "@/utils/editMode";
 	import { repoConfig } from "@/config/editConfig";
 
@@ -42,7 +34,8 @@
 	let isPinned = $state(false);
 	let slug = $state("");
 
-	let authed = $state(false);
+	let proxyReady = $state(false);
+	let checkingProxy = $state(false);
 	let saving = $state(false);
 	let loading = $state(false);
 	let editMode = $state(false);
@@ -50,24 +43,15 @@
 	let existingExt = $state<".md" | ".mdx">(".md");
 	let savePath = $state<string>("");
 	let showPreview = $state(false);
+	let showConfigHint = $state(false);
 	let saveSuccess = $state(false);
-	let pageDraftCount = $state(0);
-	let totalDraftCount = $state(0);
-	let unsubscribeDrafts: (() => void) | null = null;
-	let showKeyModal = $state(false);
-	let validating = $state(false);
-	let pendingKeyPem = $state("");
-	let selectedFileName = $state("");
-	let originalArticle = $state<Record<string, any>>({});
+	let hasDraftsState = $state(false);
+	let pemInput: HTMLInputElement | undefined;
 
 	// Refs
 	let mdFileInput: HTMLInputElement | undefined;
 	let contentTextarea: HTMLTextAreaElement | undefined;
 	let titleInput: HTMLInputElement | undefined;
-	let keyFileInput: HTMLInputElement | undefined;
-
-	// When set to true, after key is verified we should auto-publish
-	let pendingPublishAfterAuth = $state(false);
 
 	// ============ Derived ============
 	let tags = $derived(
@@ -81,6 +65,8 @@
 
 	let today = $derived(new Date().toISOString().slice(0, 10));
 
+	let draftKey = $derived(slug ? `write:${slug}` : "write:new");
+
 	let articleUrl = $derived.by(() => {
 		if (editMode && savePath) {
 			const pathParts = savePath.replace(/^src\/content\//, "").split("/");
@@ -91,32 +77,6 @@
 		}
 		return `/posts/blog/${slug}/`;
 	});
-
-	function snapshotArticle(): Record<string, any> {
-		return { title, content, coverUrl, description, tagsInput, category, pubDate, isDraft, isPinned, slug, existingSha, existingExt, savePath, editMode };
-	}
-
-	function applyArticle(snap: Record<string, any>) {
-		if (snap.title !== undefined) title = snap.title;
-		if (snap.content !== undefined) content = snap.content;
-		if (snap.coverUrl !== undefined) coverUrl = snap.coverUrl;
-		if (snap.description !== undefined) description = snap.description;
-		if (snap.tagsInput !== undefined) tagsInput = snap.tagsInput;
-		if (snap.category !== undefined) category = snap.category;
-		if (snap.pubDate !== undefined) pubDate = snap.pubDate;
-		if (snap.isDraft !== undefined) isDraft = snap.isDraft;
-		if (snap.isPinned !== undefined) isPinned = snap.isPinned;
-		if (snap.slug !== undefined) slug = snap.slug;
-		if (snap.existingSha !== undefined) existingSha = snap.existingSha;
-		if (snap.existingExt !== undefined) existingExt = snap.existingExt;
-		if (snap.savePath !== undefined) savePath = snap.savePath;
-		if (snap.editMode !== undefined) editMode = snap.editMode;
-	}
-
-	function hasArticleChanges(): boolean {
-		const cur = snapshotArticle();
-		return JSON.stringify(cur) !== JSON.stringify(originalArticle);
-	}
 
 	// ============ Frontmatter Generation ============
 	function generateFrontmatter(): string {
@@ -280,8 +240,6 @@
 					pubDate = isNaN(d.getTime()) ? today : d.toISOString().slice(0, 10);
 				}
 
-				originalArticle = snapshotArticle();
-				restoreFromDrafts();
 				showToast("文章已加载", "success");
 				return true;
 			}
@@ -320,8 +278,6 @@
 				pubDate = typeof pubDateVal === "string" ? pubDateVal.slice(0, 10) : today;
 			}
 
-			originalArticle = snapshotArticle();
-			restoreFromDrafts();
 			showToast("文章已加载", "success");
 			return true;
 		} catch (err) {
@@ -443,8 +399,6 @@
 				pubDate = typeof data.published === "string" ? data.published.slice(0, 10) : today;
 			}
 
-			originalArticle = snapshotArticle();
-			restoreFromDrafts();
 			showToast("文章已加载", "success");
 		} catch (err) {
 			showToast("加载文章失败", "error");
@@ -453,82 +407,67 @@
 		}
 	}
 
-	// ============ Draft Functions ============
-	function restoreFromDrafts() {
-		const drafts = getDraftsByPage("write");
-		if (drafts.length === 0) return;
-		const latest = drafts[drafts.length - 1];
-		if (latest && latest.payload) {
-			applyArticle(latest.payload);
-			showToast(`已从本地草稿恢复（${new Date(latest.timestamp).toLocaleString()}）`, "info");
-		}
+	// ============ Draft Management ============
+	function collectDraftData() {
+		return { title, content, coverUrl, description, tagsInput, category, pubDate, isDraft, isPinned, slug, savePath, existingSha, existingExt };
 	}
 
 	function handleSaveDraft() {
-		const payload = snapshotArticle();
-		saveDraft({
-			pageKey: "write",
-			pageName: "文章写作",
-			description: title ? `文章: ${title}` : "未命名文章",
-			operation: editMode ? "update" : "create",
-			payload,
-		});
-		showToast("草稿已保存到本地", "success");
+		const data = collectDraftData();
+		const preview = title || "无标题文章";
+		saveDraft(draftKey, "文章", data, preview);
+		hasDraftsState = hasAnyDrafts();
+		showToast("草稿已保存到浏览器", "success");
 	}
 
-	async function handleBatchSubmit() {
-		if (!authed) {
-			showToast("请先导入密钥", "warning");
-			triggerKeyImport();
-			return;
-		}
-		saving = true;
-		try {
-			const result = await submitAllDrafts();
-			if (result.failed === 0) showToast(`批量提交成功，共${result.success}项`, "success");
-			else showToast(`提交完成：成功${result.success}，失败${result.failed}`, "warning");
-		} finally {
-			saving = false;
-		}
+	function loadArticleFromDraft(draft: any) {
+		if (!draft) return;
+		title = draft.title || "";
+		content = draft.content || "";
+		coverUrl = draft.coverUrl || "";
+		description = draft.description || "";
+		tagsInput = draft.tagsInput || "";
+		category = draft.category || "";
+		pubDate = draft.pubDate || today;
+		isDraft = !!draft.isDraft;
+		isPinned = !!draft.isPinned;
+		slug = draft.slug || "";
+		savePath = draft.savePath || "";
+		existingSha = draft.existingSha || null;
+		existingExt = draft.existingExt || ".md";
+		showToast("已加载草稿", "success");
 	}
 
-	async function publishDraftPayload(payload: Record<string, any>): Promise<boolean> {
-		const fmLines: string[] = ["---"];
-		const dVal = payload.pubDate || new Date().toISOString().slice(0, 10);
-		const esc = (s: any) => String(s ?? "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-		fmLines.push(`title: "${esc(payload.title)}"`);
-		fmLines.push(`published: ${dVal}`);
-		fmLines.push(`updated: ${dVal}`);
-		if (payload.description) fmLines.push(`description: "${esc(payload.description)}"`);
-		if (payload.coverUrl) fmLines.push(`image: "${esc(payload.coverUrl)}"`);
-		const tagList = String(payload.tagsInput || "").split(/[,，]/).map((t: string) => t.trim()).filter(Boolean);
-		if (tagList.length > 0) {
-			fmLines.push("tags:");
-			for (const t of tagList) fmLines.push(`  - ${esc(t)}`);
-		}
-		if (payload.category) fmLines.push(`category: ${esc(payload.category)}`);
-		fmLines.push(`draft: ${!!payload.isDraft}`);
-		fmLines.push(`pinned: ${!!payload.isPinned}`);
-		fmLines.push(`author: fqzlr`);
-		fmLines.push("---");
-		const body = String(payload.content || "").trimStart();
-		const fullContent = `${fmLines.join("\n")}\n\n${body}`;
-		const ext: ".md" | ".mdx" = payload.existingExt || ".md";
-		const filePath = payload.editMode && payload.savePath
-			? `${payload.savePath}${ext}`
-			: `src/content/posts/blog/${payload.slug}${ext}`;
-		const commitMsg = payload.editMode
-			? `chore(posts): update "${esc(payload.title)}"`
-			: `chore(posts): create "${esc(payload.title)}"`;
-		if (payload.editMode && payload.existingSha) {
-			return await updateRepoFile(filePath, fullContent, payload.existingSha, commitMsg, repoConfig);
-		} else {
-			return await createRepoFile(filePath, fullContent, commitMsg, repoConfig);
+	function handleImportKey() {
+		pemInput?.click();
+	}
+
+	async function handlePemSelect(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) { input.value = ""; return; }
+		await importPemFile(file);
+		input.value = "";
+		checkingProxy = true;
+		proxyReady = await checkProxyConfigured();
+		checkingProxy = false;
+	}
+
+	function handleBatchSubmit() {
+		if (confirm("确定要提交所有页面的草稿到 GitHub 吗？")) {
+			window.dispatchEvent(new CustomEvent("blog:batch-submit"));
+			// Also submit current article if it has a draft
+			const dk = draftKey;
+			const draft = getDraft<any>(dk);
+			if (draft) {
+				loadArticleFromDraft(draft);
+				handlePublish();
+			}
 		}
 	}
 
 	// ============ Save / Publish ============
-	async function doPublish() {
+	async function handlePublish() {
 		if (!title.trim()) {
 			showToast("请输入标题", "warning");
 			titleInput?.focus();
@@ -547,21 +486,51 @@
 			}
 		}
 
+		checkingProxy = true;
+		proxyReady = await checkProxyConfigured();
+		checkingProxy = false;
+
+		if (!proxyReady) {
+			showToast("GitHub 代理未配置，请联系管理员设置环境变量", "error");
+			showConfigHint = true;
+			return;
+		}
+
 		saving = true;
 		try {
-			const ok = await publishDraftPayload(snapshotArticle());
+			const fullContent = buildFullContent();
+			let filePath: string;
+			if (editMode && savePath) {
+				filePath = `${savePath}${existingExt}`;
+			} else {
+				filePath = `src/content/posts/blog/${slug}${existingExt}`;
+			}
+			const commitMsg = editMode
+				? `chore(posts): update "${title}"`
+				: `chore(posts): create "${title}"`;
+
+			let ok = false;
+			if (editMode && existingSha) {
+				ok = await updateRepoFile(
+					filePath,
+					fullContent,
+					existingSha,
+					commitMsg,
+					repoConfig,
+				);
+			} else {
+				ok = await createRepoFile(filePath, fullContent, commitMsg, repoConfig);
+			}
+
 			if (ok) {
 				showToast(editMode ? "文章已更新！" : "文章已发布！", "success");
 				editMode = true;
 				saveSuccess = true;
 				setTimeout(() => (saveSuccess = false), 5000);
-				const fp = editMode && savePath ? `${savePath}${existingExt}` : `src/content/posts/blog/${slug}${existingExt}`;
-				const result = await getRepoFile(fp, repoConfig);
+				const result = await getRepoFile(filePath, repoConfig);
 				if (result) {
 					existingSha = result.sha;
 				}
-				clearDraftsByPage("write");
-				originalArticle = snapshotArticle();
 			} else {
 				showToast("保存失败，请检查 GitHub App 权限配置", "error");
 			}
@@ -570,75 +539,6 @@
 		} finally {
 			saving = false;
 		}
-	}
-
-	async function handleSubmit() {
-		if (!authed) {
-			showToast("请先导入密钥", "warning");
-			return;
-		}
-		await doPublish();
-	}
-
-	function handlePublish() {
-		handleSubmit();
-	}
-
-	// ============ Key Import (RyuChan-style simple flow) ============
-	function triggerKeyImport() {
-		keyFileInput?.click();
-	}
-
-	async function handleKeyFileSelect(e: Event) {
-		const input = e.target as HTMLInputElement;
-		const file = input.files?.[0];
-		if (!file) {
-			input.value = "";
-			return;
-		}
-		try {
-			const pem = await readFileAsText(file);
-			let appId = repoConfig.appId;
-			if (!appId) {
-				appId = getStoredAppId();
-			}
-			if (!appId) {
-				const inputId = prompt("请输入你的 GitHub App ID（数字）：", "");
-				if (!inputId) {
-					showToast("需要 App ID 才能完成认证", "error");
-					input.value = "";
-					return;
-				}
-				appId = inputId.trim();
-			}
-			showToast("正在验证私钥...", "info");
-			const result = await validateCredentials(appId, pem);
-			if (result.ok) {
-				setStoredAppId(appId);
-				setStoredPrivateKey(pem);
-				authed = true;
-				showToast("私钥导入成功！", "success");
-				if (pendingPublishAfterAuth) {
-					pendingPublishAfterAuth = false;
-					await tick();
-					handlePublish();
-				}
-			} else {
-				showToast(result.error || "私钥验证失败", "error");
-			}
-		} catch (err) {
-			showToast("读取私钥文件失败", "error");
-		} finally {
-			input.value = "";
-		}
-	}
-
-	function handleLogout() {
-		if (!confirm("确定要清除已保存的私钥吗？清除后需要重新导入才能编辑。")) return;
-		clearStoredCredentials();
-		invalidateToken();
-		authed = false;
-		showToast("已清除私钥", "info");
 	}
 
 	// ============ Import MD file ============
@@ -702,7 +602,7 @@
 					break;
 				case "s":
 					e.preventDefault();
-					handleSaveDraft();
+					handlePublish();
 					break;
 			}
 		}
@@ -862,18 +762,12 @@
 	// ============ Init ============
 	onMount(async () => {
 		ensureIconify();
-		authed = hasValidCredentials();
+		checkingProxy = true;
+		proxyReady = await checkProxyConfigured();
+		checkingProxy = false;
 
-		registerSubmitHandler("write", async (draft) => {
-			return await publishDraftPayload(draft.payload || {});
-		});
-
-		totalDraftCount = getDraftCount();
-		pageDraftCount = getDraftsByPage("write").length;
-		unsubscribeDrafts = onDraftsChanged((count) => {
-			totalDraftCount = count;
-			pageDraftCount = getDraftsByPage("write").length;
-		});
+		hasDraftsState = hasAnyDrafts();
+		onDraftsChanged(() => { hasDraftsState = hasAnyDrafts(); });
 
 		const params = new URLSearchParams(window.location.search);
 		const pathParam = params.get("path");
@@ -884,16 +778,22 @@
 			loadArticle(slugParam);
 		} else {
 			pubDate = today;
-			originalArticle = snapshotArticle();
-			restoreFromDrafts();
+			// 检查新文章草稿
+			const draft = getDraft<any>("write:new");
+			if (draft) {
+				loadArticleFromDraft(draft);
+			}
 		}
 
-		return () => {
-			if (unsubscribeDrafts) {
-				unsubscribeDrafts();
-				unsubscribeDrafts = null;
+		// 批量提交监听
+		window.addEventListener("blog:batch-submit", () => {
+			const dk = draftKey;
+			const d = getDraft<any>(dk);
+			if (d && !saving) {
+				loadArticleFromDraft(d);
+				handlePublish();
 			}
-		};
+		});
 	});
 </script>
 
@@ -907,7 +807,7 @@
 		</a>
 	</div>
 	<div class="toolbar-right">
-		{#if saveSuccess && authed && editMode}
+		{#if saveSuccess && proxyReady && editMode}
 			<a href={articleUrl} class="toolbar-btn toolbar-view" target="_blank" title="在新窗口预览文章">
 				<iconify-icon icon="material-symbols:open-in-new-rounded" class="text-lg"></iconify-icon>
 				<span class="btn-text">查看文章</span>
@@ -929,51 +829,53 @@
 			></iconify-icon>
 			<span class="btn-text">{showPreview ? "编辑" : "预览"}</span>
 		</button>
-
-		<button class="toolbar-btn toolbar-draft" onclick={handleSaveDraft} disabled={saving} title="保存草稿到本地（不会提交到GitHub）">
-			<iconify-icon icon="material-symbols:save-outline-rounded" class="text-lg"></iconify-icon>
+		<!-- 🔵 保存草稿 -->
+		<button
+			class="toolbar-btn toolbar-draft"
+			onclick={handleSaveDraft}
+			disabled={saving || loading}
+			title="保存草稿到浏览器"
+		>
+			<iconify-icon icon="material-symbols:draft-orders-rounded" class="text-lg"></iconify-icon>
 			<span class="btn-text">保存草稿</span>
-			{#if pageDraftCount > 0}<span class="draft-badge-inline">{pageDraftCount}</span>{/if}
 		</button>
-
-		{#if authed}
-			<button class="toolbar-btn toolbar-key-ok" onclick={handleLogout} title="已认证，点击清除私钥">
-				<iconify-icon icon="material-symbols:vpn-key-rounded" class="text-lg"></iconify-icon>
-				<span class="btn-text">已认证</span>
-			</button>
-		{:else}
-			<button class="toolbar-btn toolbar-key-err" onclick={triggerKeyImport} title="点击导入 GitHub App 私钥">
-				<iconify-icon icon="material-symbols:key-rounded" class="text-lg"></iconify-icon>
-				<span class="btn-text">导入密钥</span>
-			</button>
-		{/if}
-
-		{#if totalDraftCount > 0}
-			<button class="toolbar-btn toolbar-batch" onclick={handleBatchSubmit} title={`批量提交所有${totalDraftCount}项更改到GitHub`}>
-				<iconify-icon icon="material-symbols:cloud-upload-rounded" class="text-lg"></iconify-icon>
-				<span class="btn-text">批量提交</span>
-				<span class="batch-badge-inline">{totalDraftCount}</span>
-			</button>
-		{/if}
-
+		<!-- 🟡 导入密钥 -->
+		<button
+			class="toolbar-btn toolbar-key"
+			class:toolbar-key-imported={!!getClientKey()}
+			onclick={handleImportKey}
+			title={getClientKey() ? "密钥已导入（点击重新导入）" : "导入 .pem 私钥文件"}
+		>
+			<iconify-icon icon="material-symbols:key-rounded" class="text-lg"></iconify-icon>
+			<span class="btn-text">{getClientKey() ? "已导入" : "导入密钥"}</span>
+		</button>
+		<!-- 🟢 提交（原有的发布/保存按钮） -->
 		<button
 			class="toolbar-btn toolbar-publish"
-			class:toolbar-publish--disabled={!authed}
-			onclick={handleSubmit}
+			onclick={handlePublish}
 			disabled={saving || loading}
-			title={authed ? (editMode ? "提交文章到GitHub" : "发布文章到GitHub") : "请先导入密钥"}
+			title={editMode ? "保存文章" : "发布文章"}
 		>
 			{#if saving}
 				<iconify-icon icon="material-symbols:progress-activity-rounded" class="text-lg animate-spin"></iconify-icon>
-				<span class="btn-text">{editMode ? "提交中..." : "发布中..."}</span>
-			{:else if !authed}
-				<iconify-icon icon="material-symbols:lock-rounded" class="text-lg"></iconify-icon>
-				<span class="btn-text">需密钥</span>
+				<span class="btn-text">{editMode ? "保存中..." : "发布中..."}</span>
 			{:else}
-				<iconify-icon icon="material-symbols:send-rounded" class="text-lg"></iconify-icon>
-				<span class="btn-text">{editMode ? "提交" : "发布"}</span>
+				<iconify-icon icon={editMode ? "material-symbols:save-rounded" : "material-symbols:send-rounded"} class="text-lg"></iconify-icon>
+				<span class="btn-text">{editMode ? "保存" : "发布"}</span>
 			{/if}
 		</button>
+		<!-- 🟣 批量提交 -->
+		{#if hasDraftsState}
+			<button
+				class="toolbar-btn toolbar-batch"
+				onclick={handleBatchSubmit}
+				disabled={saving || loading}
+				title="一次性提交所有页面草稿到 GitHub"
+			>
+				<iconify-icon icon="material-symbols:batch-update-rounded" class="text-lg"></iconify-icon>
+				<span class="btn-text">批量提交</span>
+			</button>
+		{/if}
 
 		<input
 			bind:this={mdFileInput}
@@ -983,11 +885,11 @@
 			onchange={handleMdFileSelect}
 		/>
 		<input
-			bind:this={keyFileInput}
+			bind:this={pemInput}
 			type="file"
-			accept=".pem,application/x-pem-file,text/plain"
+			accept=".pem,.key"
 			style="display:none"
-			onchange={handleKeyFileSelect}
+			onchange={handlePemSelect}
 		/>
 	</div>
 </div>
@@ -1058,7 +960,7 @@
 					bind:this={contentTextarea}
 					bind:value={content}
 					class="content-textarea"
-					placeholder="开始写作...&#10;&#10;支持 Markdown 语法&#10;快捷键: Ctrl+B 加粗 / Ctrl+I 斜体 / Ctrl+K 链接 / Ctrl+S 保存草稿"
+					placeholder="开始写作...&#10;&#10;支持 Markdown 语法&#10;快捷键: Ctrl+B 加粗 / Ctrl+I 斜体 / Ctrl+K 链接 / Ctrl+S 保存"
 					onkeydown={(e) => {
 						handleEditorKeydown(e);
 						handleTextareaKeydown(e);
@@ -1076,7 +978,7 @@
 			{/if}
 			<div class="editor-footer">
 				<span class="word-count">{wordCount} 字</span>
-				<span class="shortcuts-hint">Ctrl+B 加粗 | Ctrl+I 斜体 | Ctrl+K 链接 | Ctrl+S 保存草稿</span>
+				<span class="shortcuts-hint">Ctrl+B 加粗 | Ctrl+I 斜体 | Ctrl+K 链接 | Ctrl+S 保存</span>
 			</div>
 		</div>
 
@@ -1186,19 +1088,67 @@
 				</label>
 			</div>
 
-			<div class="sidebar-section auth-status-section">
-				{#if authed}
-					<div class="auth-indicator auth-ok">
-						<iconify-icon icon="material-symbols:vpn-key-rounded" class="text-base"></iconify-icon>
-						<span>已导入私钥</span>
-						<button class="auth-logout-btn" onclick={handleLogout} title="清除私钥">清除</button>
+			<div class="sidebar-section proxy-status" onclick={() => (showConfigHint = !showConfigHint)} role="button" tabindex="0">
+				<div class="proxy-indicator">
+					{#if checkingProxy}
+						<iconify-icon icon="material-symbols:progress-activity-rounded" class="text-base animate-spin"></iconify-icon>
+						<span>检测中...</span>
+					{:else if proxyReady}
+						<iconify-icon icon="material-symbols:cloud-done-rounded" class="text-base" style="color:#22c55e"></iconify-icon>
+						<span>GitHub 代理已连接</span>
+					{:else}
+						<iconify-icon icon="material-symbols:cloud-off-rounded" class="text-base" style="color:#f59e0b"></iconify-icon>
+						<span>代理未配置 - 点击查看帮助</span>
+					{/if}
+				</div>
+			</div>
+		</div>
+	</div>
+{/if}
+
+{#if showConfigHint}
+	<div class="hint-overlay" onclick={() => (showConfigHint = false)}>
+		<div class="hint-card" onclick={(e) => e.stopPropagation()}>
+			<div class="hint-header">
+				<h3>
+					<iconify-icon icon="material-symbols:info-outline-rounded" class="text-lg mr-2"></iconify-icon>
+					GitHub 代理配置说明
+				</h3>
+				<button class="hint-close" onclick={() => (showConfigHint = false)}>
+					<iconify-icon icon="material-symbols:close-rounded" class="text-xl"></iconify-icon>
+				</button>
+			</div>
+			<div class="hint-body">
+				<p>
+					在线编辑功能使用 <strong>服务端 GitHub App 代理</strong> 进行认证，无需在浏览器导入密钥。
+					站点管理员需在部署平台添加以下环境变量：
+				</p>
+				<div class="env-table">
+					<div class="env-row env-row-head">
+						<span>变量名</span><span>说明</span>
 					</div>
-				{:else}
-					<div class="auth-indicator auth-err">
-						<iconify-icon icon="material-symbols:key-off-rounded" class="text-base"></iconify-icon>
-						<span>请先点击工具栏「导入密钥」按钮导入私钥</span>
+					<div class="env-row">
+						<code>GH_APP_ID</code>
+						<span>GitHub App 的数字 ID</span>
 					</div>
-				{/if}
+					<div class="env-row">
+						<code>GH_PRIVATE_KEY</code>
+						<span>GitHub App 私钥（PEM 格式完整文本，含换行符）</span>
+					</div>
+					<div class="env-row">
+						<code>GH_USER</code>
+						<span>仓库所有者用户名（默认 fqzlr）</span>
+					</div>
+					<div class="env-row">
+						<code>GH_REPO</code>
+						<span>仓库名（默认 my-blog）</span>
+					</div>
+				</div>
+				<p class="hint-note">
+					<iconify-icon icon="material-symbols:lightbulb-outline-rounded" class="text-sm"></iconify-icon>
+					在 Vercel 中：Settings → Environment Variables；在 Cloudflare Pages 中：Settings → Environment Variables。
+					私钥包含换行符，在 Vercel/Cloudflare 环境变量中直接粘贴完整 PEM 文本即可。配置后需重新部署生效。
+				</p>
 			</div>
 		</div>
 	</div>
@@ -1296,6 +1246,75 @@
 		opacity: 0.6;
 		cursor: not-allowed;
 		transform: none;
+	}
+
+	.toolbar-draft {
+		border-color: #3b82f6;
+		color: #3b82f6 !important;
+	}
+	.toolbar-draft:hover:not(:disabled) {
+		background: #3b82f6 !important;
+		color: white !important;
+	}
+	.toolbar-draft:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+	:global(.dark) .toolbar-draft {
+		border-color: #60a5fa;
+		color: #60a5fa !important;
+	}
+	:global(.dark) .toolbar-draft:hover:not(:disabled) {
+		background: #60a5fa !important;
+		color: #000 !important;
+	}
+
+	.toolbar-key {
+		border-color: #f59e0b;
+		color: #d97706 !important;
+	}
+	.toolbar-key:hover {
+		background: #f59e0b !important;
+		color: white !important;
+	}
+	.toolbar-key-imported {
+		border-color: #22c55e !important;
+		color: #16a34a !important;
+		background: rgba(34, 197, 94, 0.08) !important;
+	}
+	:global(.dark) .toolbar-key {
+		border-color: #fbbf24;
+		color: #fbbf24 !important;
+	}
+	:global(.dark) .toolbar-key:hover {
+		background: #fbbf24 !important;
+		color: #000 !important;
+	}
+	:global(.dark) .toolbar-key-imported {
+		border-color: #4ade80 !important;
+		color: #4ade80 !important;
+		background: rgba(74, 222, 128, 0.12) !important;
+	}
+
+	.toolbar-batch {
+		border-color: #8b5cf6;
+		color: #8b5cf6 !important;
+	}
+	.toolbar-batch:hover:not(:disabled) {
+		background: #8b5cf6 !important;
+		color: white !important;
+	}
+	.toolbar-batch:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+	:global(.dark) .toolbar-batch {
+		border-color: #a78bfa;
+		color: #a78bfa !important;
+	}
+	:global(.dark) .toolbar-batch:hover:not(:disabled) {
+		background: #a78bfa !important;
+		color: #000 !important;
 	}
 
 	.toolbar-view {
@@ -1638,51 +1657,29 @@
 		margin-top: -2px;
 	}
 
-	.auth-status-section {
-		margin-top: 8px;
+	.proxy-status {
+		padding: 12px;
+		border-radius: 10px;
+		background: var(--bg-secondary, #f9fafb);
+		border: 1px solid var(--border, #e5e7eb);
+		cursor: pointer;
+		transition: all 0.15s;
 	}
-	.auth-indicator {
+	.proxy-status:hover {
+		border-color: hsl(var(--theme-hue, 165), 70%, 50%);
+	}
+	:global(.dark) .proxy-status {
+		background: rgba(255, 255, 255, 0.03);
+		border-color: rgba(255, 255, 255, 0.1);
+	}
+	.proxy-indicator {
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		padding: 12px 14px;
-		border-radius: 10px;
 		font-size: 13px;
-		font-weight: 500;
+		color: var(--text-secondary, #6b7280);
 	}
-	.auth-ok {
-		background: rgba(34, 197, 94, 0.1);
-		color: #16a34a;
-		border: 1px solid rgba(34, 197, 94, 0.25);
-	}
-	:global(.dark) .auth-ok {
-		background: rgba(74, 222, 128, 0.1);
-		color: #4ade80;
-		border-color: rgba(74, 222, 128, 0.2);
-	}
-	.auth-err {
-		background: rgba(245, 158, 11, 0.1);
-		color: #d97706;
-		border: 1px solid rgba(245, 158, 11, 0.25);
-	}
-	:global(.dark) .auth-err {
-		background: rgba(251, 191, 36, 0.1);
-		color: #fbbf24;
-		border-color: rgba(251, 191, 36, 0.2);
-	}
-	.auth-logout-btn {
-		margin-left: auto;
-		background: none;
-		border: 1px solid currentColor;
-		border-radius: 6px;
-		color: inherit;
-		font-size: 12px;
-		padding: 3px 10px;
-		cursor: pointer;
-		opacity: 0.7;
-		transition: opacity 0.15s;
-	}
-	.auth-logout-btn:hover { opacity: 1; }
+	:global(.dark) .proxy-indicator { color: #9ca3af; }
 
 	.loading-state {
 		display: flex;
@@ -1695,6 +1692,85 @@
 		color: var(--text-secondary, #6b7280);
 		font-size: 14px;
 	}
+
+	/* ===== Config hint modal ===== */
+	.hint-overlay {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.5);
+		backdrop-filter: blur(4px);
+		z-index: 200;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 20px;
+		animation: fadeIn 0.2s ease;
+	}
+	@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+	.hint-card {
+		background: var(--card-bg, white);
+		border-radius: 16px;
+		width: 100%;
+		max-width: 520px;
+		box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+		animation: slideUp 0.25s ease;
+		overflow: hidden;
+		border: 1px solid var(--border, rgba(0,0,0,0.08));
+	}
+	@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+	:global(.dark) .hint-card { background: #1a1a2e; border-color: rgba(255,255,255,0.1); }
+	.hint-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 16px 20px 12px;
+		border-bottom: 1px solid var(--border, rgba(0,0,0,0.08));
+	}
+	:global(.dark) .hint-header { border-bottom-color: rgba(255,255,255,0.1); }
+	.hint-header h3 {
+		margin: 0; font-size: 16px; font-weight: 700;
+		display: flex; align-items: center; color: var(--text-color, #1a1a2e);
+	}
+	:global(.dark) .hint-header h3 { color: #f0f0f0; }
+	.hint-close {
+		width: 30px; height: 30px; border-radius: 8px; border: none; background: transparent;
+		cursor: pointer; display: flex; align-items: center; justify-content: center;
+		color: #888; transition: all 0.15s;
+	}
+	.hint-close:hover { background: rgba(0,0,0,0.06); color: #333; }
+	:global(.dark) .hint-close:hover { background: rgba(255,255,255,0.1); color: #fff; }
+	.hint-body { padding: 16px 20px; font-size: 13px; line-height: 1.7; color: var(--text-secondary, #555); }
+	:global(.dark) .hint-body { color: #bbb; }
+	.hint-body p { margin: 0 0 12px; }
+	.hint-body strong { color: hsl(var(--theme-hue,165),70%,45%); }
+	.env-table {
+		border: 1px solid var(--border, rgba(0,0,0,0.1));
+		border-radius: 10px; overflow: hidden; margin: 12px 0;
+	}
+	:global(.dark) .env-table { border-color: rgba(255,255,255,0.1); }
+	.env-row {
+		display: grid; grid-template-columns: 160px 1fr; gap: 12px;
+		padding: 10px 14px; align-items: center;
+	}
+	.env-row + .env-row { border-top: 1px solid var(--border, rgba(0,0,0,0.06)); }
+	:global(.dark) .env-row + .env-row { border-top-color: rgba(255,255,255,0.06); }
+	.env-row-head {
+		font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;
+		background: var(--bg-secondary, rgba(0,0,0,0.03)); color: var(--text-color,#333);
+	}
+	:global(.dark) .env-row-head { background: rgba(255,255,255,0.04); color: #ddd; }
+	.env-row code {
+		font-family: "SF Mono","Fira Code",monospace; font-size: 12px; padding: 3px 8px;
+		border-radius: 5px; background: hsla(var(--theme-hue,165),70%,50%,0.08);
+		color: hsl(var(--theme-hue,165),70%,40%); font-weight: 600;
+	}
+	:global(.dark) .env-row code { color: hsl(var(--theme-hue,165),70%,60%); background: hsla(var(--theme-hue,165),70%,50%,0.12); }
+	.hint-note {
+		display: flex; align-items: flex-start; gap: 6px; margin: 12px 0 0 !important;
+		padding: 10px 12px; border-radius: 8px;
+		background: rgba(245,158,11,0.08); color: #92400e; font-size: 12px;
+	}
+	:global(.dark) .hint-note { background: rgba(251,191,36,0.1); color: #fbbf24; }
 
 	@media (max-width: 768px) {
 		.write-container { flex-direction: column; min-height: 50vh; }
@@ -1710,58 +1786,4 @@
 	}
 	.animate-spin { animation: spin 0.8s linear infinite; }
 	@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-
-	.toolbar-draft {
-		border-color: rgba(59, 130, 246, 0.4) !important;
-		color: #2563eb !important;
-		background: rgba(59, 130, 246, 0.08) !important;
-	}
-	.toolbar-draft:hover:not(:disabled) {
-		background: rgba(59, 130, 246, 0.15) !important;
-	}
-	:global(.dark) .toolbar-draft { border-color: rgba(96, 165, 250, 0.4) !important; color: #60a5fa !important; background: rgba(96, 165, 250, 0.1) !important; }
-
-	.toolbar-key-ok {
-		border-color: #22c55e !important;
-		color: #16a34a !important;
-		background: rgba(34, 197, 94, 0.1) !important;
-	}
-	:global(.dark) .toolbar-key-ok { border-color: #4ade80 !important; color: #4ade80 !important; background: rgba(74, 222, 128, 0.15) !important; }
-
-	.toolbar-key-err {
-		border-color: #f59e0b !important;
-		color: #d97706 !important;
-		background: rgba(245, 158, 11, 0.12) !important;
-	}
-	:global(.dark) .toolbar-key-err { border-color: #fbbf24 !important; color: #fbbf24 !important; background: rgba(251, 191, 36, 0.15) !important; }
-
-	.toolbar-batch {
-		border-color: rgba(139, 92, 246, 0.4) !important;
-		color: #7c3aed !important;
-		background: rgba(139, 92, 246, 0.08) !important;
-	}
-	.toolbar-batch:hover { background: rgba(139, 92, 246, 0.15) !important; }
-	:global(.dark) .toolbar-batch { border-color: rgba(167, 139, 250, 0.4) !important; color: #a78bfa !important; background: rgba(167, 139, 250, 0.1) !important; }
-
-	.draft-badge-inline, .batch-badge-inline {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		min-width: 18px;
-		height: 18px;
-		padding: 0 5px;
-		border-radius: 9px;
-		font-size: 11px;
-		font-weight: 700;
-		margin-left: 4px;
-	}
-	.draft-badge-inline { background: #2563eb; color: white; }
-	.batch-badge-inline { background: #7c3aed; color: white; }
-	:global(.dark) .draft-badge-inline { background: #60a5fa; color: #0f172a; }
-	:global(.dark) .batch-badge-inline { background: #a78bfa; color: #1e1b4b; }
-
-	.toolbar-publish--disabled {
-		opacity: 0.7;
-		cursor: not-allowed;
-	}
 </style>

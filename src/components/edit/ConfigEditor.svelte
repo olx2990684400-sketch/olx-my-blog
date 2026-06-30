@@ -3,12 +3,16 @@
 	import EditToolbar from "./EditToolbar.svelte";
 	import EditToast from "./EditToast.svelte";
 	import {
+		hasValidToken,
 		getRepoFile,
+		updateRepoFile,
 		showToast,
 		deepClone,
 		ensureIconify,
+		saveDraft,
+		getDraft,
+		deleteDraft,
 	} from "@/utils/editMode";
-	import { setupRepoDrafts } from "@/utils/draftHelpers";
 	import { repoConfig } from "@/config/editConfig";
 
 	// ============ 类型定义（使用 any 兼容完整 siteConfig） ============
@@ -17,30 +21,12 @@
 	// ============ 状态 ============
 	let editMode = $state(true);
 	let saving = $state(false);
+	let hasChanges = $state(false);
 	let codeMode = $state(false);
 
 	let config = $state<FullConfig>({});
 	let originalConfig = $state<FullConfig>({});
 	let codeContent = $state("");
-	let fileSha = $state<string | null>(null);
-	let originalCodeContent = $state("");
-
-	const drafts = setupRepoDrafts({
-		pageKey: "config",
-		pageName: "站点配置",
-		getContent: () => codeMode ? codeContent : generateTsCode(config),
-		setContent: (v) => { codeContent = v; codeMode = true; },
-		getPath: () => "src/config/siteConfig.ts",
-		getSha: () => fileSha,
-		setSha: (v) => (fileSha = v),
-		getOriginalContent: () => originalCodeContent,
-		setOriginalContent: (v) => { originalCodeContent = v; originalConfig = deepClone(config); },
-		getCommitMsg: (isEdit) => isEdit ? "chore: 更新站点配置" : "chore: 创建站点配置",
-		onSubmitted: () => {
-			setTimeout(() => window.location.reload(), 1500);
-		},
-	});
-	let hasChanges = $derived(drafts.hasLocalChanges());
 
 	// 页面开关标签映射
 	const pageLabels: Record<string, string> = {
@@ -76,7 +62,20 @@
 	onMount(() => {
 		ensureIconify();
 		loadConfig();
-		initRepoState();
+		const draft = getDraft<any>("config");
+		if (draft?.config) {
+			if (confirm("发现未提交的配置草稿，是否恢复？")) {
+				config = draft.config;
+				codeContent = draft.codeContent || "";
+				codeMode = !!draft.codeMode;
+				hasChanges = true;
+				showToast("草稿已恢复", "success");
+			} else {
+				deleteDraft("config");
+			}
+		}
+		window.addEventListener("blog:batch-submit", handleBatchSubmit);
+		return () => window.removeEventListener("blog:batch-submit", handleBatchSubmit);
 	});
 
 	function loadConfig() {
@@ -96,21 +95,10 @@
 				originalConfig = deepClone(config);
 				// 保存原始navItems的副本用于取消
 				originalNavItems = deepClone(navItems);
-				originalCodeContent = generateTsCode(config);
 			}
 		} catch (e) {
 			console.error("Failed to load site config:", e);
 		}
-	}
-
-	async function initRepoState() {
-		try {
-			const existing = await getRepoFile("src/config/siteConfig.ts", repoConfig);
-			if (existing) {
-				fileSha = existing.sha;
-			}
-		} catch {}
-		drafts.restoreFromDrafts();
 	}
 
 	let originalNavItems = $state<NavItem[]>([]);
@@ -133,6 +121,7 @@
 	function handleModeChange(e: CustomEvent) {
 		editMode = e.detail.editing;
 		if (editMode) {
+			hasChanges = false;
 		} else {
 			codeMode = false;
 		}
@@ -141,8 +130,8 @@
 	function handleCancel() {
 		config = deepClone(originalConfig);
 		navItems = deepClone(originalNavItems);
+		hasChanges = false;
 		codeMode = false;
-		drafts.clearDrafts();
 		showToast("已取消编辑", "info");
 	}
 
@@ -155,6 +144,7 @@
 		}
 		obj[path[path.length - 1]] = value;
 		config = { ...config };
+		hasChanges = true;
 	}
 
 	function updateKeywords(value: string) {
@@ -163,6 +153,7 @@
 			.map((s) => s.trim())
 			.filter(Boolean);
 		config = { ...config };
+		hasChanges = true;
 	}
 
 	function getKeywordsString(): string {
@@ -171,6 +162,7 @@
 
 	function updatePageField(key: string, value: boolean) {
 		config.pages = { ...config.pages, [key]: value };
+		hasChanges = true;
 	}
 
 	// ============ 导航栏链接管理 ============
@@ -331,6 +323,7 @@
 		navItems = newItems;
 		config.navbar = { ...(config.navbar || {}), navItems: [...navItems] };
 		config = { ...config };
+		hasChanges = true;
 	}
 
 	function changeNavItemParent(id: string, newParent: NavParent) {
@@ -352,6 +345,7 @@
 		navItems = newItems;
 		config.navbar = { ...(config.navbar || {}), navItems: [...navItems] };
 		config = { ...config };
+		hasChanges = true;
 	}
 
 	function toggleNavItemHidden(id: string) {
@@ -388,24 +382,28 @@
 		navItems = newItems;
 		config.navbar = { ...(config.navbar || {}), navItems: [...navItems] };
 		config = { ...config };
+		hasChanges = true;
 	}
 
 	function updateCustomNavItem(id: string, field: string, value: any) {
 		navItems = navItems.map((n) => (n.id === id ? { ...n, [field]: value } : n));
 		config.navbar = { ...(config.navbar || {}), navItems: [...navItems] };
 		config = { ...config };
+		hasChanges = true;
 	}
 
 	function removeCustomNavItem(id: string) {
 		navItems = navItems.filter((n) => n.id !== id);
 		config.navbar = { ...(config.navbar || {}), navItems: [...navItems] };
 		config = { ...config };
+		hasChanges = true;
 	}
 
 	function resetNavItems() {
 		navItems = getDefaultNavOrder();
 		config.navbar = { ...(config.navbar || {}), navItems: [...navItems] };
 		config = { ...config };
+		hasChanges = true;
 		showToast("已重置为默认导航顺序", "info");
 	}
 
@@ -732,12 +730,59 @@ ${pagesStr}
 
 	// ============ 保存到 GitHub ============
 	function handleSaveDraft() {
-		drafts.saveToDrafts();
+		saveDraft("config", "站点配置", { config, codeContent, codeMode }, "配置更改");
+		showToast("配置草稿已保存", "success");
 	}
 
-	async function handleSubmit() {
+	async function handleBatchSubmit() {
+		const draft = getDraft<any>("config");
+		if (draft?.config) {
+			config = draft.config;
+			codeContent = draft.codeContent || codeContent;
+			codeMode = !!draft.codeMode;
+			await handleSave();
+			if (!saving) deleteDraft("config");
+		}
+	}
+
+	async function handleSave() {
+		if (!hasValidToken()) {
+			showToast("请先导入密钥再保存", "warning");
+			return;
+		}
 		saving = true;
-		try { await drafts.submitDrafts(); } finally { saving = false; }
+		try {
+			const filePath = "src/config/siteConfig.ts";
+			const newContent = codeMode ? codeContent : generateTsCode(config);
+
+			// 先获取当前文件的 SHA
+			const existing = await getRepoFile(filePath, repoConfig);
+			if (!existing) {
+				showToast("无法获取远程文件信息，请检查仓库权限", "error");
+				saving = false;
+				return;
+			}
+
+			const ok = await updateRepoFile(
+				filePath,
+				newContent,
+				existing.sha,
+				"chore: 更新站点配置",
+				repoConfig,
+			);
+
+			if (ok) {
+				showToast("保存成功！配置将在部署后生效", "success");
+				hasChanges = false;
+				originalConfig = deepClone(config);
+				setTimeout(() => window.location.reload(), 1500);
+			} else {
+				showToast("保存失败，请检查 Token 权限（需要 repo 权限）", "error");
+			}
+		} catch (e) {
+			showToast("保存失败：" + (e as Error).message, "error");
+		}
+		saving = false;
 	}
 
 	const huePreviewColor = $derived(`hsl(${getThemeColor().hue}, 70%, 50%)`);
@@ -749,7 +794,6 @@ ${pagesStr}
 <div class="config-edit-toolbar">
 	<EditToolbar
 		pageName="站点配置"
-		pageKey="config"
 		mountTo=".page-header-toolbar-slot"
 		startInEditMode={true}
 		persistentEdit={true}
@@ -757,8 +801,8 @@ ${pagesStr}
 		{hasChanges}
 		showAddButton={false}
 		on:modeChange={(e) => handleModeChange(e)}
+		on:save={() => handleSave()}
 		on:saveDraft={() => handleSaveDraft()}
-		on:submit={() => handleSubmit()}
 		on:cancel={() => handleCancel()}
 	/>
 </div>
@@ -787,6 +831,7 @@ ${pagesStr}
 					bind:value={codeContent}
 					class="code-textarea"
 					spellcheck="false"
+					oninput={() => (hasChanges = true)}
 				></textarea>
 			</div>
 		</div>

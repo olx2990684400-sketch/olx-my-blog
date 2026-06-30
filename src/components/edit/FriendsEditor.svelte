@@ -4,12 +4,17 @@
 	import EditToast from "./EditToast.svelte";
 	import {
 		readGistFile,
+		writeGistFile,
+		createGist,
 		showToast,
+		hasValidToken,
 		genId,
 		deepClone,
 		ensureIconify,
+		saveDraft,
+		getDraft,
+		deleteDraft,
 	} from "@/utils/editMode";
-	import { setupGistDrafts } from "@/utils/draftHelpers";
 	import { friendsEditConfig } from "@/config/editConfig";
 
 	interface FriendItem {
@@ -25,67 +30,36 @@
 
 	let editMode = $state(false);
 	let saving = $state(false);
+	let hasChanges = $state(false);
 	let friends = $state<FriendItem[]>([]);
 	let originalFriends = $state<FriendItem[]>([]);
 	let editingIndex = $state(-1);
 	let gistLoaded = $state(false);
-	let gistConfig = $state({ gistId: friendsEditConfig.gistId, fileName: friendsEditConfig.fileName });
 
 	const typeColors: Record<string, { bg: string; text: string }> = {
 		Blog: { bg: "#3b82f6", text: "#ffffff" },
 		Docs: { bg: "#f59e0b", text: "#ffffff" },
 	};
 
-	const drafts = setupGistDrafts<FriendItem[]>({
-		pageKey: "friends",
-		pageName: "友链",
-		getData: () => friends,
-		setData: (v) => (friends = v),
-		getOriginalData: () => originalFriends,
-		setOriginalData: (v) => (originalFriends = v),
-		gistConfig,
-		onSubmitted: () => {
-			setTimeout(() => window.location.reload(), 1200);
-		},
-	});
-
-	let hasChanges = $derived(drafts.hasLocalChanges());
-
 	onMount(() => {
 		ensureIconify();
 		collectFromDOM();
 		loadGistData();
-	});
-
-	async function loadGistData() {
-		if (!friendsEditConfig.gistId) {
-			gistLoaded = true;
-			drafts.restoreFromDrafts();
-			return;
-		}
-		try {
-			const content = await readGistFile(
-				friendsEditConfig.gistId,
-				friendsEditConfig.fileName,
-			);
-			if (content) {
-				const gistItems: FriendItem[] = JSON.parse(content);
-				const existingUrls = new Set(friends.map((f) => f.siteurl.replace(/\/$/, "")));
-				for (const g of gistItems) {
-					const url = g.siteurl.replace(/\/$/, "");
-					if (!existingUrls.has(url)) {
-						friends = [...friends, { ...g, id: g.id || genId("fr") }];
-						existingUrls.add(url);
-					}
-				}
-				originalFriends = deepClone(friends);
+		// 加载草稿
+		const draft = getDraft<any>("friends");
+		if (draft?.friends) {
+			if (confirm("发现未提交的友链草稿，是否恢复？")) {
+				friends = draft.friends;
+				hasChanges = true;
+				showToast("草稿已恢复", "success");
+			} else {
+				deleteDraft("friends");
 			}
-		} catch (e) {
-			console.error("Failed to load Gist friends:", e);
 		}
-		gistLoaded = true;
-		drafts.restoreFromDrafts();
-	}
+		// 批量提交监听
+		window.addEventListener("blog:batch-submit", handleBatchSubmit);
+		return () => window.removeEventListener("blog:batch-submit", handleBatchSubmit);
+	});
 
 	function collectFromDOM() {
 		const grid = document.getElementById("friends-grid");
@@ -113,13 +87,44 @@
 		originalFriends = deepClone(items);
 	}
 
+	async function loadGistData() {
+		if (!friendsEditConfig.gistId) {
+			gistLoaded = true;
+			return;
+		}
+		try {
+			const content = await readGistFile(
+				friendsEditConfig.gistId,
+				friendsEditConfig.fileName,
+			);
+			if (content) {
+				const gistItems: FriendItem[] = JSON.parse(content);
+				// 合并：Gist友链追加到本地球链后面，URL去重
+				const existingUrls = new Set(friends.map((f) => f.siteurl.replace(/\/$/, "")));
+				for (const g of gistItems) {
+					const url = g.siteurl.replace(/\/$/, "");
+					if (!existingUrls.has(url)) {
+						friends = [...friends, { ...g, id: g.id || genId("fr") }];
+						existingUrls.add(url);
+					}
+				}
+				originalFriends = deepClone(friends);
+			}
+		} catch (e) {
+			console.error("Failed to load Gist friends:", e);
+		}
+		gistLoaded = true;
+	}
+
 	// 进入/退出编辑模式
 	function handleModeChange(e: CustomEvent) {
 		editMode = e.detail.editing;
 		if (editMode) {
+			// 进入编辑模式：隐藏SSR渲染的网格，使用Svelte渲染的可编辑网格
 			hideSSRGrid();
 			editingIndex = -1;
 		} else {
+			// 退出编辑模式：恢复SSR网格
 			showSSRGrid();
 		}
 	}
@@ -141,7 +146,7 @@
 	// 取消编辑：回滚到原始数据
 	function handleCancel() {
 		friends = deepClone(originalFriends);
-		drafts.clearDrafts();
+		hasChanges = false;
 		editingIndex = -1;
 		showSSRGrid();
 	}
@@ -152,6 +157,8 @@
 		const arr = [...friends];
 		[arr[index - 1], arr[index]] = [arr[index], arr[index - 1]];
 		friends = arr;
+		hasChanges = true;
+		// 如果正在编辑，调整editingIndex
 		if (editingIndex === index) editingIndex = index - 1;
 		else if (editingIndex === index - 1) editingIndex = index;
 	}
@@ -161,6 +168,7 @@
 		const arr = [...friends];
 		[arr[index], arr[index + 1]] = [arr[index + 1], arr[index]];
 		friends = arr;
+		hasChanges = true;
 		if (editingIndex === index) editingIndex = index + 1;
 		else if (editingIndex === index + 1) editingIndex = index;
 	}
@@ -182,6 +190,7 @@
 			return;
 		}
 		editingIndex = -1;
+		hasChanges = true;
 		showToast("已修改，记得点击保存", "info");
 	}
 
@@ -189,8 +198,10 @@
 	function cancelItemEdit(index: number) {
 		const f = friends[index];
 		if (f._draft && !f.title.trim()) {
+			// 新增的空草稿，直接删除
 			friends = friends.filter((_, i) => i !== index);
 		} else {
+			// 回滚该卡片到原始状态
 			const orig = originalFriends.find(
 				(o) => (o.id || o.siteurl) === (f.id || f.siteurl) && !f._draft,
 			);
@@ -207,6 +218,7 @@
 		const f = friends[index];
 		if (!confirm(`确定要删除「${f.title || "该条目"}」吗？`)) return;
 		friends = friends.filter((_, i) => i !== index);
+		hasChanges = true;
 		if (editingIndex === index) editingIndex = -1;
 		else if (editingIndex > index) editingIndex--;
 		showToast("已删除，记得点击保存", "info");
@@ -225,33 +237,70 @@
 		};
 		friends = [...friends, newFriend];
 		editingIndex = friends.length - 1;
+		hasChanges = true;
 	}
 
+	// 保存所有更改到Gist
 	function handleSaveDraft() {
-		const cleanData = friends.map(({ _draft, ...rest }) => ({
-			...rest,
-			id: rest.id || genId("fr"),
-		}));
-		friends = cleanData;
-		drafts.saveToDrafts();
+		saveDraft("friends", "友链", { friends }, `共 ${friends.length} 个友链`);
+		showToast("友链草稿已保存", "success");
 	}
 
-	async function handleSubmit() {
-		if (editingIndex >= 0) {
-			finishEdit(editingIndex);
-			if (editingIndex >= 0) return;
+	async function handleBatchSubmit() {
+		const draft = getDraft<any>("friends");
+		if (draft?.friends) {
+			friends = draft.friends;
+			await handleSave();
+			if (!saving) deleteDraft("friends");
+		}
+	}
+
+	async function handleSave() {
+		if (!hasValidToken()) {
+			showToast("请先导入密钥再保存", "warning");
+			return;
 		}
 		saving = true;
 		try {
+			// 清理数据：去除_draft标记
 			const cleanData = friends.map(({ _draft, ...rest }) => ({
 				...rest,
 				id: rest.id || genId("fr"),
 			}));
-			friends = cleanData;
-			await drafts.submitDrafts();
-		} finally {
-			saving = false;
+
+			let gistId = friendsEditConfig.gistId;
+			if (!gistId) {
+				const newGistId = await createGist(
+					"Blog Friends Data",
+					friendsEditConfig.fileName,
+					JSON.stringify(cleanData, null, 2),
+				);
+				if (!newGistId) {
+					showToast("创建 Gist 失败，请检查 Token 的 gist 权限", "error");
+					saving = false;
+					return;
+				}
+				gistId = newGistId;
+				showToast("已创建新 Gist，请在 editConfig.ts 中配置此 ID: " + gistId, "info");
+			}
+			const ok = await writeGistFile(
+				gistId,
+				friendsEditConfig.fileName,
+				JSON.stringify(cleanData, null, 2),
+			);
+			if (!ok) {
+				showToast("保存失败，请检查 Token 权限", "error");
+				saving = false;
+				return;
+			}
+			showToast("保存成功！页面将刷新以应用更改", "success");
+			hasChanges = false;
+			originalFriends = deepClone(friends);
+			setTimeout(() => window.location.reload(), 1200);
+		} catch (e) {
+			showToast("保存失败：" + (e as Error).message, "error");
 		}
+		saving = false;
 	}
 
 	// 更新编辑中的卡片字段
@@ -270,15 +319,14 @@
 <!-- 编辑工具栏 -->
 <div class="friends-edit-toolbar">
 	<EditToolbar
-		pageKey="friends"
 		pageName="友链"
 		mountTo=".page-header-toolbar-slot"
 		{saving}
 		{hasChanges}
 		on:modeChange={(e) => handleModeChange(e)}
 		on:add={() => handleAdd()}
+		on:save={() => handleSave()}
 		on:saveDraft={() => handleSaveDraft()}
-		on:submit={() => handleSubmit()}
 		on:cancel={() => handleCancel()}
 	/>
 </div>

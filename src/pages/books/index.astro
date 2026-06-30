@@ -46,6 +46,22 @@ const bookItems = customBangumi
 const readingCount = bookItems.filter((b) => b.status === 3).length;
 const readCount = bookItems.filter((b) => b.status === 2).length;
 const wishCount = bookItems.filter((b) => b.status === 1).length;
+
+// 转换为 BangumiEditor 可用的初始数据
+const bangumiInitialItems = customBangumi
+	.filter((item) => item.data.category === "book")
+	.map((item) => ({
+		id: item.id,
+		title: item.data.title,
+		name_cn: item.data.name_cn || item.data.title,
+		category: "book",
+		status: item.data.status,
+		score: item.data.score || 0,
+		image: typeof item.data.image === "string" ? item.data.image : item.data.image.src,
+		tags: item.data.tags || [],
+		comment: item.data.comment || "",
+		updated_at: item.data.published?.toISOString() || new Date().toISOString(),
+	}));
 ---
 
 <MainGridLayout title={i18n(I18nKey.booksTitle)} description={i18n(I18nKey.booksSubtitle)}>
@@ -96,9 +112,11 @@ const wishCount = bookItems.filter((b) => b.status === 1).length;
 				defaultCategory="book"
 				skipDomCollect={true}
 				customPageName="书架"
+				initialItems={bangumiInitialItems}
 			/>
 		</div>
 
+		<div class="bangumi-section">
 			{bookItems.length > 0 ? (
 				<Bookshelf books={bookItems} />
 			) : (
@@ -107,6 +125,7 @@ const wishCount = bookItems.filter((b) => b.status === 1).length;
 					<p class="text-neutral-500 dark:text-neutral-400">{i18n(I18nKey.booksNoData)}</p>
 				</div>
 			)}
+		</div>
 		</div>
 	</div>
 
