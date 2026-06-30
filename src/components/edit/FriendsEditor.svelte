@@ -3,14 +3,14 @@
 	import EditToolbar from "./EditToolbar.svelte";
 	import EditToast from "./EditToast.svelte";
 	import {
-		getRepoFile,
+		readGistFile,
 		showToast,
 		genId,
 		deepClone,
 		ensureIconify,
 	} from "@/utils/editMode";
-	import { setupJsonRepoDrafts } from "@/utils/draftHelpers";
-	import { friendsEditConfig, repoConfig } from "@/config/editConfig";
+	import { setupGistDrafts } from "@/utils/draftHelpers";
+	import { friendsEditConfig } from "@/config/editConfig";
 
 	interface FriendItem {
 		id?: string;
@@ -28,21 +28,22 @@
 	let friends = $state<FriendItem[]>([]);
 	let originalFriends = $state<FriendItem[]>([]);
 	let editingIndex = $state(-1);
-	let dataLoaded = $state(false);
+	let gistLoaded = $state(false);
+	let gistConfig = $state({ gistId: friendsEditConfig.gistId, fileName: friendsEditConfig.fileName });
 
 	const typeColors: Record<string, { bg: string; text: string }> = {
 		Blog: { bg: "#3b82f6", text: "#ffffff" },
 		Docs: { bg: "#f59e0b", text: "#ffffff" },
 	};
 
-	const drafts = setupJsonRepoDrafts<FriendItem[]>({
+	const drafts = setupGistDrafts<FriendItem[]>({
 		pageKey: "friends",
 		pageName: "友链",
 		getData: () => friends,
 		setData: (v) => (friends = v),
 		getOriginalData: () => originalFriends,
 		setOriginalData: (v) => (originalFriends = v),
-		repoPath: friendsEditConfig.repoPath,
+		gistConfig,
 		onSubmitted: () => {
 			setTimeout(() => window.location.reload(), 1200);
 		},
@@ -53,19 +54,24 @@
 	onMount(() => {
 		ensureIconify();
 		collectFromDOM();
-		loadRepoData();
+		loadGistData();
 	});
 
-	// ========== 从 Repo 加载外部友链 ==========
-	async function loadRepoData() {
+	async function loadGistData() {
+		if (!friendsEditConfig.gistId) {
+			gistLoaded = true;
+			drafts.restoreFromDrafts();
+			return;
+		}
 		try {
-			const file = await getRepoFile(friendsEditConfig.repoPath, repoConfig);
-			if (file) {
-				drafts.setSha(file.sha);
-				drafts.setOriginalContent(file.content);
-				const repoItems: FriendItem[] = JSON.parse(file.content);
+			const content = await readGistFile(
+				friendsEditConfig.gistId,
+				friendsEditConfig.fileName,
+			);
+			if (content) {
+				const gistItems: FriendItem[] = JSON.parse(content);
 				const existingUrls = new Set(friends.map((f) => f.siteurl.replace(/\/$/, "")));
-				for (const g of repoItems) {
+				for (const g of gistItems) {
 					const url = g.siteurl.replace(/\/$/, "");
 					if (!existingUrls.has(url)) {
 						friends = [...friends, { ...g, id: g.id || genId("fr") }];
@@ -75,9 +81,9 @@
 				originalFriends = deepClone(friends);
 			}
 		} catch (e) {
-			console.error("Failed to load Repo friends:", e);
+			console.error("Failed to load Gist friends:", e);
 		}
-		dataLoaded = true;
+		gistLoaded = true;
 		drafts.restoreFromDrafts();
 	}
 

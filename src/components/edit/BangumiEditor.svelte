@@ -3,14 +3,14 @@
 	import EditToolbar from "./EditToolbar.svelte";
 	import EditToast from "./EditToast.svelte";
 	import {
-		getRepoFile,
+		readGistFile,
 		showToast,
 		genId,
 		deepClone,
 		ensureIconify,
 	} from "@/utils/editMode";
-	import { setupJsonRepoDrafts } from "@/utils/draftHelpers";
-	import { bangumiEditConfig, repoConfig } from "@/config/editConfig";
+	import { setupGistDrafts } from "@/utils/draftHelpers";
+	import { bangumiEditConfig } from "@/config/editConfig";
 
 	interface BangumiItem {
 		id: string;
@@ -44,17 +44,18 @@
 	let items = $state<BangumiItem[]>([]);
 	let originalItems = $state<BangumiItem[]>([]);
 	let editingIndex = $state(-1);
-	let dataLoaded = $state(false);
+	let gistLoaded = $state(false);
 	let activeTab = $state(defaultCategory);
+	let gistConfig = $state({ gistId: bangumiEditConfig.gistId, fileName: bangumiEditConfig.fileName });
 
-	const drafts = setupJsonRepoDrafts<BangumiItem[]>({
+	const drafts = setupGistDrafts<BangumiItem[]>({
 		pageKey: "bangumi",
 		pageName: customPageName,
 		getData: () => items,
 		setData: (v) => (items = v),
 		getOriginalData: () => originalItems,
 		setOriginalData: (v) => (originalItems = v),
-		repoPath: bangumiEditConfig.repoPath,
+		gistConfig,
 		onSubmitted: () => {
 			setTimeout(() => window.location.reload(), 1200);
 		},
@@ -108,7 +109,7 @@
 		} else if (!skipDomCollect) {
 			collectFromDOM();
 		}
-		loadRepoData();
+		loadGistData();
 	});
 
 	// 从 DOM 收集 SSR 渲染的本地番剧条目
@@ -168,18 +169,24 @@
 		originalItems = deepClone(collected);
 	}
 
-	// ========== 从 Repo 加载外部番剧 ==========
-	async function loadRepoData() {
+	async function loadGistData() {
+		if (!bangumiEditConfig.gistId) {
+			gistLoaded = true;
+			renderExternalItems();
+			drafts.restoreFromDrafts();
+			return;
+		}
 		try {
-			const file = await getRepoFile(bangumiEditConfig.repoPath, repoConfig);
-			if (file) {
-				drafts.setSha(file.sha);
-				drafts.setOriginalContent(file.content);
-				const repoItems: BangumiItem[] = JSON.parse(file.content);
+			const content = await readGistFile(
+				bangumiEditConfig.gistId,
+				bangumiEditConfig.fileName,
+			);
+			if (content) {
+				const gistItems: BangumiItem[] = JSON.parse(content);
 				const localKeys = new Set(
 					items.filter((i) => i._local).map((i) => `${i.title}|${i.category}`),
 				);
-				for (const g of repoItems) {
+				for (const g of gistItems) {
 					const key = `${g.title}|${g.category}`;
 					const existingIdx = items.findIndex(
 						(i) => `${i.title}|${i.category}` === key,
@@ -198,9 +205,9 @@
 				originalItems = deepClone(items);
 			}
 		} catch (e) {
-			console.error("Failed to load Repo bangumi:", e);
+			console.error("Failed to load Gist bangumi:", e);
 		}
-		dataLoaded = true;
+		gistLoaded = true;
 		renderExternalItems();
 		drafts.restoreFromDrafts();
 	}
@@ -438,7 +445,7 @@
 	/>
 </div>
 
-{#if !dataLoaded}
+{#if !gistLoaded}
 	<div class="loading-hint">
 		<iconify-icon icon="material-symbols:progress-activity-rounded" class="animate-spin mr-2"></iconify-icon>
 		加载数据中...
