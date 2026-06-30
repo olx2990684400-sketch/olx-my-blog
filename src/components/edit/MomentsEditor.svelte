@@ -3,14 +3,14 @@
 	import EditToolbar from "./EditToolbar.svelte";
 	import EditToast from "./EditToast.svelte";
 	import {
-		readGistFile,
+		getRepoFile,
 		showToast,
 		genId,
 		deepClone,
 		ensureIconify,
 	} from "@/utils/editMode";
-	import { setupGistDrafts } from "@/utils/draftHelpers";
-	import { momentsEditConfig } from "@/config/editConfig";
+	import { setupJsonRepoDrafts } from "@/utils/draftHelpers";
+	import { momentsEditConfig, repoConfig } from "@/config/editConfig";
 
 	const props = $props<{
 		initialLocalCount?: number;
@@ -37,17 +37,16 @@
 	let moments = $state<MomentItem[]>([]);
 	let originalMoments = $state<MomentItem[]>([]);
 	let editingIndex = $state(-1);
-	let gistLoaded = $state(false);
-	let gistConfig = $state({ gistId: momentsEditConfig.gistId, fileName: momentsEditConfig.fileName });
+	let dataLoaded = $state(false);
 
-	const drafts = setupGistDrafts<MomentItem[]>({
+	const drafts = setupJsonRepoDrafts<MomentItem[]>({
 		pageKey: "moments",
 		pageName: "说说",
 		getData: () => moments,
 		setData: (v) => (moments = v),
 		getOriginalData: () => originalMoments,
 		setOriginalData: (v) => (originalMoments = v),
-		gistConfig,
+		repoPath: momentsEditConfig.repoPath,
 		onSubmitted: () => {
 			setTimeout(() => window.location.reload(), 1200);
 		},
@@ -58,7 +57,7 @@
 	onMount(() => {
 		ensureIconify();
 		collectFromDOM();
-		loadGistData();
+		loadRepoData();
 	});
 
 	// ========== 从 DOM 收集 SSR 渲染的本地说说 ==========
@@ -132,24 +131,17 @@
 		originalMoments = deepClone(items);
 	}
 
-	// ========== 从 Gist 加载外部说说 ==========
-	async function loadGistData() {
-		if (!momentsEditConfig.gistId) {
-			gistLoaded = true;
-			renderExternalMoments();
-			drafts.restoreFromDrafts();
-			return;
-		}
+	// ========== 从 Repo 加载外部说说 ==========
+	async function loadRepoData() {
 		try {
-			const content = await readGistFile(
-				momentsEditConfig.gistId,
-				momentsEditConfig.fileName,
-			);
-			if (content) {
-				const gistItems: MomentItem[] = JSON.parse(content);
+			const file = await getRepoFile(momentsEditConfig.repoPath, repoConfig);
+			if (file) {
+				drafts.setSha(file.sha);
+				drafts.setOriginalContent(file.content);
+				const repoItems: MomentItem[] = JSON.parse(file.content);
 				const localIds = new Set(moments.map((m) => m.id));
 				const merged = [...moments];
-				for (const g of gistItems) {
+				for (const g of repoItems) {
 					const idx = merged.findIndex((m) => m.id === g.id);
 					if (idx >= 0) {
 						merged[idx] = { ...g, id: g.id || merged[idx].id };
@@ -166,9 +158,9 @@
 				originalMoments = deepClone(merged);
 			}
 		} catch (e) {
-			console.error("Failed to load Gist moments:", e);
+			console.error("Failed to load Repo moments:", e);
 		}
-		gistLoaded = true;
+		dataLoaded = true;
 		renderExternalMoments();
 		drafts.restoreFromDrafts();
 	}
@@ -672,7 +664,7 @@
 {/if}
 
 <!-- 非编辑模式下加载提示 -->
-{#if !gistLoaded && !editMode}
+{#if !dataLoaded && !editMode}
 	<div class="wx-loading-hint">
 		<iconify-icon icon="material-symbols:progress-activity-rounded" class="animate-spin mr-2"></iconify-icon>
 		加载数据中...

@@ -3,14 +3,14 @@
 	import EditToolbar from "./EditToolbar.svelte";
 	import EditToast from "./EditToast.svelte";
 	import {
-		readGistFile,
+		getRepoFile,
 		showToast,
 		genId,
 		deepClone,
 		ensureIconify,
 	} from "@/utils/editMode";
-	import { setupGistDrafts } from "@/utils/draftHelpers";
-	import { collectionsEditConfig } from "@/config/editConfig";
+	import { setupJsonRepoDrafts } from "@/utils/draftHelpers";
+	import { collectionsEditConfig, repoConfig } from "@/config/editConfig";
 
 	interface CollectionItem {
 		id?: string;
@@ -32,18 +32,17 @@
 	let items = $state<CollectionItem[]>([]);
 	let originalItems = $state<CollectionItem[]>([]);
 	let editingIndex = $state(-1);
-	let gistLoaded = $state(false);
+	let dataLoaded = $state(false);
 	let activeTab = $state("all");
-	let gistConfig = $state({ gistId: collectionsEditConfig.gistId, fileName: collectionsEditConfig.fileName });
 
-	const drafts = setupGistDrafts<CollectionItem[]>({
+	const drafts = setupJsonRepoDrafts<CollectionItem[]>({
 		pageKey: "collections",
 		pageName: "收藏",
 		getData: () => items,
 		setData: (v) => (items = v),
 		getOriginalData: () => originalItems,
 		setOriginalData: (v) => (originalItems = v),
-		gistConfig,
+		repoPath: collectionsEditConfig.repoPath,
 		onSubmitted: () => {
 			setTimeout(() => window.location.reload(), 1200);
 		},
@@ -56,7 +55,7 @@
 		// 从 initialData prop 解析初始数据
 		parseInitialData();
 		// 加载 Gist 数据（外部收藏）
-		loadGistData();
+		loadRepoData();
 	});
 
 	function parseInitialData() {
@@ -76,23 +75,18 @@
 		}
 	}
 
-	async function loadGistData() {
-		if (!collectionsEditConfig.gistId) {
-			gistLoaded = true;
-			drafts.restoreFromDrafts();
-			return;
-		}
+	// ========== 从 Repo 加载外部收藏 ==========
+	async function loadRepoData() {
 		try {
-			const content = await readGistFile(
-				collectionsEditConfig.gistId,
-				collectionsEditConfig.fileName,
-			);
-			if (content) {
-				const gistItems: CollectionItem[] = JSON.parse(content);
+			const file = await getRepoFile(collectionsEditConfig.repoPath, repoConfig);
+			if (file) {
+				drafts.setSha(file.sha);
+				drafts.setOriginalContent(file.content);
+				const repoItems: CollectionItem[] = JSON.parse(file.content);
 				const existingUrls = new Set(
 					items.map((i) => i.url.replace(/\/$/, "")),
 				);
-				for (const g of gistItems) {
+				for (const g of repoItems) {
 					const url = g.url.replace(/\/$/, "");
 					if (!existingUrls.has(url)) {
 						items = [
@@ -105,9 +99,9 @@
 				originalItems = deepClone(items);
 			}
 		} catch (e) {
-			console.error("Failed to load Gist collections:", e);
+			console.error("Failed to load Repo collections:", e);
 		}
-		gistLoaded = true;
+		dataLoaded = true;
 		drafts.restoreFromDrafts();
 	}
 
@@ -330,7 +324,7 @@
 	/>
 </div>
 
-{#if !gistLoaded && items.length === 0}
+{#if !dataLoaded && items.length === 0}
 	<div class="loading-hint">
 		<iconify-icon icon="material-symbols:progress-activity-rounded" class="animate-spin mr-2"></iconify-icon>
 		加载数据中...

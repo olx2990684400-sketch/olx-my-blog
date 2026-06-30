@@ -17,7 +17,83 @@ import {
 	type DraftChange,
 } from "./editMode";
 
-// ============ Gist 类型编辑器草稿辅助 ============
+// ============ JSON Repo 文件类型编辑器草稿辅助（替代 Gist 模式） ============
+
+export interface JsonRepoDraftContext<T> {
+	pageKey: string;
+	pageName: string;
+	getData: () => T;
+	setData: (data: T) => void;
+	getOriginalData: () => T;
+	setOriginalData: (data: T) => void;
+	repoPath: string;
+	onSubmitted?: () => void;
+}
+
+export function setupJsonRepoDrafts<T>(ctx: JsonRepoDraftContext<T>) {
+	const { pageKey, pageName, getData, setData, getOriginalData, setOriginalData, repoPath, onSubmitted } = ctx;
+
+	let fileSha: string | null = null;
+	let originalContent = "";
+
+	function jsonContent(): string {
+		return JSON.stringify(getData(), null, 2);
+	}
+
+	function setFromContent(content: string): void {
+		try {
+			setData(JSON.parse(content) as T);
+		} catch (e) {
+			console.error(`Failed to parse JSON for ${pageName}:`, e);
+		}
+	}
+
+	function setOriginalFromContent(content: string): void {
+		originalContent = content;
+		try {
+			setOriginalData(JSON.parse(content) as T);
+		} catch (e) {
+			console.error(`Failed to parse original JSON for ${pageName}:`, e);
+		}
+	}
+
+	const inner = setupRepoDrafts({
+		pageKey,
+		pageName,
+		getContent: jsonContent,
+		setContent: setFromContent,
+		getPath: () => repoPath,
+		getSha: () => fileSha,
+		setSha: (sha) => { fileSha = sha; },
+		getOriginalContent: () => originalContent,
+		setOriginalContent: setOriginalFromContent,
+		getCommitMsg: (isEdit) => isEdit ? `chore: update ${pageName} data` : `chore: create ${pageName} data`,
+		onSubmitted,
+	});
+
+	/** 从仓库加载数据并初始化 sha / originalContent */
+	async function loadFromRepo(loader: () => Promise<{ content: string; sha: string } | null>): Promise<boolean> {
+		const result = await loader();
+		if (result) {
+			fileSha = result.sha;
+			setOriginalFromContent(result.content);
+			// 用仓库数据覆盖当前数据（保留 DOM 收集的数据做合并由调用方处理）
+			return true;
+		}
+		return false;
+	}
+
+	return {
+		...inner,
+		loadFromRepo,
+		getSha: () => fileSha,
+		setSha: (sha: string | null) => { fileSha = sha; },
+		getOriginalContent: () => originalContent,
+		setOriginalContent: setOriginalFromContent,
+	};
+}
+
+// ============ Gist 类型编辑器草稿辅助（已弃用，保留兼容） ============
 
 export interface GistDraftContext<T> {
 	pageKey: string;
