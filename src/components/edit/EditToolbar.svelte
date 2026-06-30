@@ -331,9 +331,8 @@
 			{/if}
 		</button>
 	{/if}
-</div>
 
-<!-- 密钥导入弹窗 -->
+	<!-- 密钥导入弹窗 -->
 {#if showKeyModal}
 	<div class="modal-overlay" onclick={closeKeyModal}>
 		<div class="modal-card" onclick={(e) => e.stopPropagation()}>
@@ -538,7 +537,8 @@
 			</div>
 		</div>
 	</div>
-{/if}
+	{/if}
+</div>
 
 <style>
 	.edit-toolbar {
