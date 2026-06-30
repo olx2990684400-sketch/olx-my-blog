@@ -1,6 +1,5 @@
 import sitemap from "@astrojs/sitemap";
 import svelte from "@astrojs/svelte";
-import vercel from "@astrojs/vercel/serverless";
 import tailwindcss from "@tailwindcss/vite";
 import { setMaxListeners } from "node:events";
 import { pluginCollapsibleSections } from "@expressive-code/plugin-collapsible-sections";
@@ -63,9 +62,6 @@ export default defineConfig({
 		// 队列渲染以优化性能（实验性）
 		queuedRendering: { enabled: true },
 	},
-
-	output: 'server',
-	adapter: vercel(),
 
 	integrations: [
 		swup({

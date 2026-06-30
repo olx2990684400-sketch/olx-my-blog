@@ -18,7 +18,14 @@
 - [src/utils/editMode.ts](file://src/utils/editMode.ts)
 - [src/pages/admin/index.astro](file://src/pages/admin/index.astro)
 - [src/workers/utils/rate-limit.js](file://src/workers/utils/rate-limit.js)
+- [src/components/edit/EditToolbar.svelte](file://src/components/edit/EditToolbar.svelte)
 </cite>
+
+## 更新摘要
+**变更内容**
+- 新增编辑工具栏GitHub代理App ID检测功能的详细说明
+- 增强用户界面提示信息的配置与使用说明
+- 完善编辑模式下GitHub认证流程的用户交互体验
 
 ## 目录
 1. [简介](#简介)
@@ -38,6 +45,7 @@
 - 评论系统集成：Giscus、Twikoo、Waline等第三方评论服务的配置与接口
 - 音乐服务集成：Meting API与本地音乐播放器的数据源与播放控制
 - 收藏夹API集成：收藏列表的数据格式与分类管理
+- 编辑工具栏集成：GitHub代理App ID检测功能与用户界面提示信息
 - 配置参数、认证方式与错误处理策略
 - API限制、速率控制与故障转移方案
 - 集成示例与常见问题解决方案
@@ -48,6 +56,7 @@
 - 配置层：评论系统、音乐播放器、收藏夹API的配置文件
 - 组件层：评论组件、音乐播放器与可视化组件
 - 工具层：速率限制、编辑模式中的GitHub认证工具
+- 编辑工具栏：GitHub代理App ID检测与用户界面提示
 
 ```mermaid
 graph TB
@@ -68,6 +77,11 @@ Waline["src/components/comment/Waline.astro"]
 MusicMgr["src/components/features/MusicManager.astro"]
 MusicPlayer["src/components/features/MusicPlayer.astro"]
 Visualizer["src/components/features/music-visualizer/MusicVisualizer.svelte"]
+EditToolbar["src/components/edit/EditToolbar.svelte<br/>编辑工具栏"]
+end
+subgraph "工具层"
+EditMode["src/utils/editMode.ts<br/>编辑模式工具"]
+RateLimit["src/workers/utils/rate-limit.js<br/>速率限制"]
 end
 Worker --> GHAPI
 GHAPI --> Proxy
@@ -77,6 +91,8 @@ CommentCfg --> Waline
 MusicCfg --> MusicMgr
 MusicMgr --> MusicPlayer
 MusicMgr --> Visualizer
+EditMode --> Proxy
+EditToolbar --> EditMode
 ```
 
 **图表来源**
@@ -92,6 +108,9 @@ MusicMgr --> Visualizer
 - [src/components/features/MusicManager.astro:1-170](file://src/components/features/MusicManager.astro#L1-L170)
 - [src/components/features/MusicPlayer.astro:1-755](file://src/components/features/MusicPlayer.astro#L1-L755)
 - [src/components/features/music-visualizer/MusicVisualizer.svelte:1-92](file://src/components/features/music-visualizer/MusicVisualizer.svelte#L1-L92)
+- [src/components/edit/EditToolbar.svelte:1-312](file://src/components/edit/EditToolbar.svelte#L1-L312)
+- [src/utils/editMode.ts:1-617](file://src/utils/editMode.ts#L1-L617)
+- [src/workers/utils/rate-limit.js:1-45](file://src/workers/utils/rate-limit.js#L1-L45)
 
 **章节来源**
 - [src/worker.js:1-26](file://src/worker.js#L1-L26)
@@ -106,6 +125,7 @@ MusicMgr --> Visualizer
 - 评论系统：Giscus、Twikoo、Waline三种评论系统，均通过配置文件启用与参数化
 - 音乐播放器：支持Meting API与本地音乐两种模式，提供播放控制、歌词与可视化
 - 收藏夹API：集中管理外部API链接，支持分类与图标
+- 编辑工具栏：集成GitHub代理App ID检测功能，提供增强的用户界面提示信息
 - 速率限制：通用速率限制工具，支持多场景配置
 
 **章节来源**
@@ -113,14 +133,16 @@ MusicMgr --> Visualizer
 - [src/config/commentConfig.ts:1-79](file://src/config/commentConfig.ts#L1-L79)
 - [src/config/musicConfig.ts:1-62](file://src/config/musicConfig.ts#L1-L62)
 - [src/config/collectionsApiConfig.ts:1-453](file://src/config/collectionsApiConfig.ts#L1-L453)
+- [src/components/edit/EditToolbar.svelte:1-312](file://src/components/edit/EditToolbar.svelte#L1-L312)
+- [src/utils/editMode.ts:1-617](file://src/utils/editMode.ts#L1-L617)
 - [src/workers/utils/rate-limit.js:1-45](file://src/workers/utils/rate-limit.js#L1-L45)
 
 ## 架构总览
-整体架构围绕“配置驱动 + 组件封装 + 代理服务”的模式展开：
+整体架构围绕"配置驱动 + 组件封装 + 代理服务"的模式展开：
 - 配置层定义第三方服务参数与启用状态
 - 组件层负责前端渲染与交互
 - 代理层统一处理认证、CORS与错误
-- 工具层提供通用能力（速率限制）
+- 工具层提供通用能力（速率限制、编辑模式）
 
 ```mermaid
 sequenceDiagram
@@ -128,11 +150,12 @@ participant Client as "客户端"
 participant Worker as "Worker入口(src/worker.js)"
 participant Edge as "Edge函数(api/github.js)"
 participant Proxy as "GitHub代理(src/workers/github-proxy.js)"
+participant EditMode as "编辑模式工具(src/utils/editMode.ts)"
 Client->>Worker : 请求 /api/github...
 Worker->>Edge : 转发到 Edge函数
 Edge->>Proxy : 调用 handleGithubProxy(request)
 Proxy->>Proxy : 校验方法/参数/认证
-Proxy->>Proxy : 服务端App认证或客户端Token
+Proxy->>EditMode : 检测App ID与认证状态
 Proxy->>GitHub : 转发API请求
 GitHub-->>Proxy : 返回响应
 Proxy-->>Client : 返回带CORS的响应
@@ -142,6 +165,7 @@ Proxy-->>Client : 返回带CORS的响应
 - [src/worker.js:1-26](file://src/worker.js#L1-L26)
 - [api/github.js:1-10](file://api/github.js#L1-L10)
 - [src/workers/github-proxy.js:156-213](file://src/workers/github-proxy.js#L156-L213)
+- [src/utils/editMode.ts:344-365](file://src/utils/editMode.ts#L344-L365)
 
 ## 详细组件分析
 
@@ -187,6 +211,52 @@ Err400 --> End
 - [src/workers/github-proxy.js:1-254](file://src/workers/github-proxy.js#L1-L254)
 - [src/utils/editMode.ts:197-218](file://src/utils/editMode.ts#L197-L218)
 - [src/pages/admin/index.astro:1358-1639](file://src/pages/admin/index.astro#L1358-L1639)
+
+### 编辑工具栏集成
+- GitHub代理App ID检测功能
+  - 自动检测服务端配置的App ID：当服务端代理配置了GitHub App ID时，客户端会自动检测并存储该ID
+  - 增强的用户界面提示：编辑工具栏根据认证状态显示不同的按钮样式和提示信息
+  - App ID优先级：优先使用服务端配置的App ID，如果不存在则使用用户手动输入的App ID
+- 用户界面提示信息
+  - 已认证状态：显示"已认证"按钮，绿色样式，提示"已导入私钥，点击管理"
+  - 未认证状态：显示"导入密钥"按钮，红色样式，提示"点击导入 GitHub App 私钥"
+  - 批量提交状态：显示草稿数量徽章，实时更新
+- 认证流程
+  - 检查代理配置：通过checkProxyConfigured方法检测代理服务器的认证状态
+  - App ID存储：将服务端App ID自动存储到localStorage中
+  - 私钥导入：支持从本地文件导入.pem格式的私钥文件
+  - 认证验证：验证App ID和私钥的有效性，生成临时安装令牌
+
+```mermaid
+flowchart TD
+Start(["编辑工具栏加载"]) --> CheckProxy["检查代理配置"]
+CheckProxy --> HasServerAppId{"服务端有App ID？"}
+HasServerAppId --> |是| StoreAppId["存储App ID到localStorage"]
+HasServerAppId --> |否| GetStoredAppId["获取本地存储的App ID"]
+StoreAppId --> ShowAuthState["显示认证状态"]
+GetStoredAppId --> ShowAuthState
+ShowAuthState --> UserAction{"用户操作"}
+UserAction --> |导入密钥| ImportKey["打开密钥导入模态框"]
+UserAction --> |批量提交| BatchSubmit["批量提交草稿"]
+ImportKey --> ValidateCert["验证证书有效性"]
+ValidateCert --> Success{"验证成功？"}
+Success --> |是| ShowAuthenticated["显示已认证状态"]
+Success --> |否| ShowError["显示错误提示"]
+BatchSubmit --> SubmitDrafts["提交所有草稿"]
+ShowAuthenticated --> End(["完成"])
+ShowError --> End
+SubmitDrafts --> End
+```
+
+**图表来源**
+- [src/components/edit/EditToolbar.svelte:143-188](file://src/components/edit/EditToolbar.svelte#L143-L188)
+- [src/utils/editMode.ts:344-365](file://src/utils/editMode.ts#L344-L365)
+- [src/utils/editMode.ts:285-299](file://src/utils/editMode.ts#L285-L299)
+
+**章节来源**
+- [src/components/edit/EditToolbar.svelte:1-312](file://src/components/edit/EditToolbar.svelte#L1-L312)
+- [src/utils/editMode.ts:235-282](file://src/utils/editMode.ts#L235-L282)
+- [src/utils/editMode.ts:344-365](file://src/utils/editMode.ts#L344-L365)
 
 ### 评论系统集成
 - 配置项
@@ -322,6 +392,7 @@ COLLECTIONS_API_CONFIG ||--o{ COLLECTION_API_ITEM : "包含"
   - 评论组件依赖commentConfig.ts中的对应系统配置
   - 音乐组件依赖musicConfig.ts中的播放器与数据源配置
   - 收藏API依赖collectionsApiConfig.ts中的列表与分类
+  - 编辑工具栏依赖editMode.ts中的认证工具
 - 代理与认证
   - GitHub代理被Worker入口与Edge函数共同调用
   - 编辑模式工具通过代理URL与本地存储的凭据进行认证
@@ -340,6 +411,7 @@ CollectionsCfg --> CollectionsPage
 Worker --> GHAPI
 GHAPI --> Proxy
 EditMode --> Proxy
+EditToolbar --> EditMode
 ```
 
 **图表来源**
@@ -349,7 +421,8 @@ EditMode --> Proxy
 - [src/worker.js:1-26](file://src/worker.js#L1-L26)
 - [api/github.js:1-10](file://api/github.js#L1-L10)
 - [src/workers/github-proxy.js:1-254](file://src/workers/github-proxy.js#L1-L254)
-- [src/utils/editMode.ts:1-325](file://src/utils/editMode.ts#L1-L325)
+- [src/utils/editMode.ts:1-617](file://src/utils/editMode.ts#L1-L617)
+- [src/components/edit/EditToolbar.svelte:1-312](file://src/components/edit/EditToolbar.svelte#L1-L312)
 
 **章节来源**
 - [src/config/commentConfig.ts:1-79](file://src/config/commentConfig.ts#L1-L79)
@@ -358,7 +431,8 @@ EditMode --> Proxy
 - [src/worker.js:1-26](file://src/worker.js#L1-L26)
 - [api/github.js:1-10](file://api/github.js#L1-L10)
 - [src/workers/github-proxy.js:1-254](file://src/workers/github-proxy.js#L1-L254)
-- [src/utils/editMode.ts:1-325](file://src/utils/editMode.ts#L1-L325)
+- [src/utils/editMode.ts:1-617](file://src/utils/editMode.ts#L1-L617)
+- [src/components/edit/EditToolbar.svelte:1-312](file://src/components/edit/EditToolbar.svelte#L1-L312)
 
 ## 性能考虑
 - 代理缓存
@@ -370,18 +444,27 @@ EditMode --> Proxy
   - 音乐可视化组件在挂载时连接音频，避免阻塞主线程
 - 速率限制
   - 通用速率限制工具支持窗口与最大请求数配置，便于扩展到评论、投票等场景
+- 编辑工具栏优化
+  - App ID检测功能仅在需要时执行，避免不必要的性能开销
+  - 用户界面提示信息采用轻量级实现，不影响编辑体验
 
 **章节来源**
 - [src/workers/github-proxy.js:95-154](file://src/workers/github-proxy.js#L95-L154)
 - [src/components/comment/Waline.astro:27-40](file://src/components/comment/Waline.astro#L27-L40)
 - [src/components/features/MusicPlayer.astro:345-386](file://src/components/features/MusicPlayer.astro#L345-L386)
 - [src/workers/utils/rate-limit.js:1-45](file://src/workers/utils/rate-limit.js#L1-L45)
+- [src/utils/editMode.ts:344-365](file://src/utils/editMode.ts#L344-L365)
 
 ## 故障排查指南
 - GitHub代理
   - 确认环境变量GH_APP_ID与GH_PRIVATE_KEY是否正确配置
   - 检查CORS头与预检请求是否通过
   - 查看代理错误响应中的message字段定位问题
+- 编辑工具栏
+  - App ID检测失败：检查服务端代理配置，确认GitHub App ID是否正确设置
+  - 私钥导入失败：确认.pem文件格式正确，私钥内容完整
+  - 认证状态异常：清除localStorage中的认证信息，重新导入证书
+  - 批量提交失败：检查草稿数据完整性，确认GitHub权限配置
 - 评论系统
   - Giscus：确认仓库、分类ID与映射参数正确，检查主题同步逻辑
   - Twikoo：确认envId与路径参数，查看初始化回调错误
@@ -394,6 +477,8 @@ EditMode --> Proxy
 
 **章节来源**
 - [src/workers/github-proxy.js:156-253](file://src/workers/github-proxy.js#L156-L253)
+- [src/components/edit/EditToolbar.svelte:174-188](file://src/components/edit/EditToolbar.svelte#L174-L188)
+- [src/utils/editMode.ts:285-299](file://src/utils/editMode.ts#L285-L299)
 - [src/components/comment/Giscus.astro:14-72](file://src/components/comment/Giscus.astro#L14-L72)
 - [src/components/comment/Twikoo.astro:40-61](file://src/components/comment/Twikoo.astro#L40-L61)
 - [src/components/comment/Waline.astro:27-40](file://src/components/comment/Waline.astro#L27-L40)
@@ -401,7 +486,7 @@ EditMode --> Proxy
 - [src/workers/utils/rate-limit.js:8-44](file://src/workers/utils/rate-limit.js#L8-L44)
 
 ## 结论
-本项目通过配置驱动的方式，将GitHub API、评论系统、音乐播放与收藏夹API进行了模块化集成。代理层统一处理认证与CORS，组件层提供灵活的参数化配置与良好的用户体验。结合速率限制与故障回退机制，整体具备较好的稳定性与可维护性。
+本项目通过配置驱动的方式，将GitHub API、评论系统、音乐播放、收藏夹API与编辑工具栏进行了模块化集成。代理层统一处理认证与CORS，组件层提供灵活的参数化配置与良好的用户体验。新增的编辑工具栏GitHub代理App ID检测功能进一步增强了用户的认证体验，通过智能的App ID检测和增强的用户界面提示信息，使编辑模式下的GitHub认证更加直观和可靠。结合速率限制与故障回退机制，整体具备较好的稳定性与可维护性。
 
 ## 附录
 - 配置参数速查
@@ -409,13 +494,18 @@ EditMode --> Proxy
   - 评论系统：type、twikoo、waline、giscus、disqus、artalk
   - 音乐播放器：mode、meting、local、volume、playMode、showLyrics
   - 收藏API：apis、categories
+  - 编辑工具栏：repoConfig.appId、localStorage存储键值
 - 集成示例
   - 在管理后台测试GitHub Token有效性
   - 在评论组件中按需启用twikoo、waline或giscus
   - 在音乐配置中选择本地或Meting数据源
+  - 在编辑工具栏中导入GitHub App私钥，自动检测App ID
+  - 使用增强的用户界面提示信息进行认证状态管理
 
 **章节来源**
 - [src/pages/admin/index.astro:1358-1639](file://src/pages/admin/index.astro#L1358-L1639)
 - [src/config/commentConfig.ts:1-79](file://src/config/commentConfig.ts#L1-L79)
 - [src/config/musicConfig.ts:1-62](file://src/config/musicConfig.ts#L1-L62)
 - [src/config/collectionsApiConfig.ts:1-453](file://src/config/collectionsApiConfig.ts#L1-L453)
+- [src/components/edit/EditToolbar.svelte:143-188](file://src/components/edit/EditToolbar.svelte#L143-L188)
+- [src/utils/editMode.ts:344-365](file://src/utils/editMode.ts#L344-L365)
