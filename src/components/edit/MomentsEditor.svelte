@@ -190,8 +190,12 @@
 			if (card?.id) localIds.add(card.id);
 		});
 
+		console.log("[renderExternalMoments] localIds:", Array.from(localIds));
+		console.log("[renderExternalMoments] all moments:", moments.map(m => ({ id: m.id, content: m.content.slice(0, 20) })));
+
 		// 需要注入的：不在本地 SSR 列表中的
 		const externalItems = moments.filter((m) => !localIds.has(m.id));
+		console.log("[renderExternalMoments] externalItems to inject:", externalItems.map(m => ({ id: m.id, content: m.content.slice(0, 20) })));
 
 		const firstLocal = feed.querySelector(".wx-feed-item:not(.wx-feed-item-external)");
 
