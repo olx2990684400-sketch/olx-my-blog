@@ -780,6 +780,18 @@
 	/* ============================================
 	 * wx- 前缀：朋友圈风格卡片（:global 用于动态注入的 DOM）
 	 * ============================================ */
+	:global(.wx-feed-item) {
+		position: relative;
+		margin-bottom: 20px;
+		padding: 16px;
+		background: var(--bg-color, white);
+		border-radius: 12px;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+	}
+	:global(.dark .wx-feed-item) {
+		background: #1a1a2e;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+	}
 	:global(.wx-feed-header) {
 		display: flex;
 		align-items: flex-start;

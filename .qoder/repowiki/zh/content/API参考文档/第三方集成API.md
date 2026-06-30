@@ -19,13 +19,17 @@
 - [src/pages/admin/index.astro](file://src/pages/admin/index.astro)
 - [src/workers/utils/rate-limit.js](file://src/workers/utils/rate-limit.js)
 - [src/components/edit/EditToolbar.svelte](file://src/components/edit/EditToolbar.svelte)
+- [vercel.json](file://vercel.json)
+- [wrangler.toml](file://wrangler.toml)
 </cite>
 
 ## 更新摘要
 **变更内容**
-- 新增编辑工具栏GitHub代理App ID检测功能的详细说明
-- 增强用户界面提示信息的配置与使用说明
-- 完善编辑模式下GitHub认证流程的用户交互体验
+- 更新GitHub代理服务实现方式：从Cloudflare Workers迁移到Vercel Serverless Functions
+- 更新架构总览图以反映新的部署架构
+- 更新依赖关系分析以体现Vercel部署配置
+- 更新故障排查指南中的部署相关配置检查
+- **更新** 编辑工具栏App ID存储逻辑改进：增强服务端App ID检测与存储机制，避免使用过期缓存值
 
 ## 目录
 1. [简介](#简介)
@@ -52,7 +56,7 @@
 
 ## 项目结构
 项目采用模块化组织，第三方集成相关代码主要分布在以下位置：
-- API层：Cloudflare Worker入口与GitHub代理
+- API层：Vercel Serverless Functions入口与GitHub代理
 - 配置层：评论系统、音乐播放器、收藏夹API的配置文件
 - 组件层：评论组件、音乐播放器与可视化组件
 - 工具层：速率限制、编辑模式中的GitHub认证工具
@@ -61,8 +65,8 @@
 ```mermaid
 graph TB
 subgraph "API层"
-Worker["src/worker.js<br/>Worker入口"]
-GHAPI["api/github.js<br/>Edge函数"]
+Vercel["vercel.json<br/>Vercel部署配置"]
+GHAPI["api/github.js<br/>Serverless函数"]
 Proxy["src/workers/github-proxy.js<br/>GitHub代理"]
 end
 subgraph "配置层"
@@ -83,7 +87,7 @@ subgraph "工具层"
 EditMode["src/utils/editMode.ts<br/>编辑模式工具"]
 RateLimit["src/workers/utils/rate-limit.js<br/>速率限制"]
 end
-Worker --> GHAPI
+Vercel --> GHAPI
 GHAPI --> Proxy
 CommentCfg --> Giscus
 CommentCfg --> Twikoo
@@ -96,7 +100,7 @@ EditToolbar --> EditMode
 ```
 
 **图表来源**
-- [src/worker.js:1-26](file://src/worker.js#L1-L26)
+- [vercel.json:1-50](file://vercel.json#L1-L50)
 - [api/github.js:1-10](file://api/github.js#L1-L10)
 - [src/workers/github-proxy.js:1-254](file://src/workers/github-proxy.js#L1-L254)
 - [src/config/commentConfig.ts:1-79](file://src/config/commentConfig.ts#L1-L79)
@@ -113,7 +117,7 @@ EditToolbar --> EditMode
 - [src/workers/utils/rate-limit.js:1-45](file://src/workers/utils/rate-limit.js#L1-L45)
 
 **章节来源**
-- [src/worker.js:1-26](file://src/worker.js#L1-L26)
+- [vercel.json:1-50](file://vercel.json#L1-L50)
 - [api/github.js:1-10](file://api/github.js#L1-L10)
 - [src/workers/github-proxy.js:1-254](file://src/workers/github-proxy.js#L1-L254)
 - [src/config/commentConfig.ts:1-79](file://src/config/commentConfig.ts#L1-L79)
@@ -143,17 +147,18 @@ EditToolbar --> EditMode
 - 组件层负责前端渲染与交互
 - 代理层统一处理认证、CORS与错误
 - 工具层提供通用能力（速率限制、编辑模式）
+- **更新** 部署层采用Vercel Serverless Functions替代Cloudflare Workers
 
 ```mermaid
 sequenceDiagram
 participant Client as "客户端"
-participant Worker as "Worker入口(src/worker.js)"
-participant Edge as "Edge函数(api/github.js)"
+participant Vercel as "Vercel部署配置(vercel.json)"
+participant Serverless as "Serverless函数(api/github.js)"
 participant Proxy as "GitHub代理(src/workers/github-proxy.js)"
 participant EditMode as "编辑模式工具(src/utils/editMode.ts)"
-Client->>Worker : 请求 /api/github...
-Worker->>Edge : 转发到 Edge函数
-Edge->>Proxy : 调用 handleGithubProxy(request)
+Client->>Vercel : 请求 /api/github...
+Vercel->>Serverless : 转发到Serverless函数
+Serverless->>Proxy : 调用 handleGithubProxy(request)
 Proxy->>Proxy : 校验方法/参数/认证
 Proxy->>EditMode : 检测App ID与认证状态
 Proxy->>GitHub : 转发API请求
@@ -162,7 +167,7 @@ Proxy-->>Client : 返回带CORS的响应
 ```
 
 **图表来源**
-- [src/worker.js:1-26](file://src/worker.js#L1-L26)
+- [vercel.json:1-50](file://vercel.json#L1-L50)
 - [api/github.js:1-10](file://api/github.js#L1-L10)
 - [src/workers/github-proxy.js:156-213](file://src/workers/github-proxy.js#L156-L213)
 - [src/utils/editMode.ts:344-365](file://src/utils/editMode.ts#L344-L365)
@@ -171,8 +176,8 @@ Proxy-->>Client : 返回带CORS的响应
 
 ### GitHub API集成
 - 代理入口
-  - Worker入口：统一路由到/api/github及其子路径
-  - Edge函数：简化包装handleGithubProxy
+  - **更新** Vercel Serverless Functions入口：通过vercel.json配置路由到/api/github及其子路径
+  - Serverless函数：简化包装handleGithubProxy，兼容原有接口
 - 认证机制
   - 服务端GitHub App认证：通过环境变量GH_APP_ID与GH_PRIVATE_KEY生成JWT并获取Installation Token，自动附加到请求头
   - 客户端令牌：若未提供Authorization，优先使用服务端Token；否则使用客户端提供的Token
@@ -202,11 +207,10 @@ Err400 --> End
 
 **图表来源**
 - [src/workers/github-proxy.js:160-213](file://src/workers/github-proxy.js#L160-L213)
-- [src/worker.js:17-19](file://src/worker.js#L17-L19)
 - [api/github.js:7-9](file://api/github.js#L7-L9)
 
 **章节来源**
-- [src/worker.js:1-26](file://src/worker.js#L1-L26)
+- [vercel.json:1-50](file://vercel.json#L1-L50)
 - [api/github.js:1-10](file://api/github.js#L1-L10)
 - [src/workers/github-proxy.js:1-254](file://src/workers/github-proxy.js#L1-L254)
 - [src/utils/editMode.ts:197-218](file://src/utils/editMode.ts#L197-L218)
@@ -214,7 +218,7 @@ Err400 --> End
 
 ### 编辑工具栏集成
 - GitHub代理App ID检测功能
-  - 自动检测服务端配置的App ID：当服务端代理配置了GitHub App ID时，客户端会自动检测并存储该ID
+  - **更新** 增强的服务端App ID检测与存储机制：当服务端代理配置了GitHub App ID时，客户端会自动检测并存储该ID，避免使用过期的缓存值
   - 增强的用户界面提示：编辑工具栏根据认证状态显示不同的按钮样式和提示信息
   - App ID优先级：优先使用服务端配置的App ID，如果不存在则使用用户手动输入的App ID
 - 用户界面提示信息
@@ -223,7 +227,7 @@ Err400 --> End
   - 批量提交状态：显示草稿数量徽章，实时更新
 - 认证流程
   - 检查代理配置：通过checkProxyConfigured方法检测代理服务器的认证状态
-  - App ID存储：将服务端App ID自动存储到localStorage中
+  - **更新** App ID存储优化：将服务端App ID自动存储到localStorage中，确保使用最新的服务端配置
   - 私钥导入：支持从本地文件导入.pem格式的私钥文件
   - 认证验证：验证App ID和私钥的有效性，生成临时安装令牌
 
@@ -231,7 +235,7 @@ Err400 --> End
 flowchart TD
 Start(["编辑工具栏加载"]) --> CheckProxy["检查代理配置"]
 CheckProxy --> HasServerAppId{"服务端有App ID？"}
-HasServerAppId --> |是| StoreAppId["存储App ID到localStorage"]
+HasServerAppId --> |是| StoreAppId["存储App ID到localStorage<br/>使用最新服务端配置"]
 HasServerAppId --> |否| GetStoredAppId["获取本地存储的App ID"]
 StoreAppId --> ShowAuthState["显示认证状态"]
 GetStoredAppId --> ShowAuthState
@@ -394,7 +398,7 @@ COLLECTIONS_API_CONFIG ||--o{ COLLECTION_API_ITEM : "包含"
   - 收藏API依赖collectionsApiConfig.ts中的列表与分类
   - 编辑工具栏依赖editMode.ts中的认证工具
 - 代理与认证
-  - GitHub代理被Worker入口与Edge函数共同调用
+  - **更新** GitHub代理通过Vercel部署配置与Serverless函数共同调用
   - 编辑模式工具通过代理URL与本地存储的凭据进行认证
 - 速率限制
   - 通用工具提供统一的速率限制逻辑，可复用到不同场景
@@ -408,7 +412,7 @@ MusicCfg --> MusicMgr
 MusicMgr --> MusicPlayer
 MusicMgr --> Visualizer
 CollectionsCfg --> CollectionsPage
-Worker --> GHAPI
+Vercel --> GHAPI
 GHAPI --> Proxy
 EditMode --> Proxy
 EditToolbar --> EditMode
@@ -418,7 +422,7 @@ EditToolbar --> EditMode
 - [src/config/commentConfig.ts:1-79](file://src/config/commentConfig.ts#L1-L79)
 - [src/config/musicConfig.ts:1-62](file://src/config/musicConfig.ts#L1-L62)
 - [src/config/collectionsApiConfig.ts:1-453](file://src/config/collectionsApiConfig.ts#L1-L453)
-- [src/worker.js:1-26](file://src/worker.js#L1-L26)
+- [vercel.json:1-50](file://vercel.json#L1-L50)
 - [api/github.js:1-10](file://api/github.js#L1-L10)
 - [src/workers/github-proxy.js:1-254](file://src/workers/github-proxy.js#L1-L254)
 - [src/utils/editMode.ts:1-617](file://src/utils/editMode.ts#L1-L617)
@@ -428,7 +432,7 @@ EditToolbar --> EditMode
 - [src/config/commentConfig.ts:1-79](file://src/config/commentConfig.ts#L1-L79)
 - [src/config/musicConfig.ts:1-62](file://src/config/musicConfig.ts#L1-L62)
 - [src/config/collectionsApiConfig.ts:1-453](file://src/config/collectionsApiConfig.ts#L1-L453)
-- [src/worker.js:1-26](file://src/worker.js#L1-L26)
+- [vercel.json:1-50](file://vercel.json#L1-L50)
 - [api/github.js:1-10](file://api/github.js#L1-L10)
 - [src/workers/github-proxy.js:1-254](file://src/workers/github-proxy.js#L1-L254)
 - [src/utils/editMode.ts:1-617](file://src/utils/editMode.ts#L1-L617)
@@ -445,8 +449,11 @@ EditToolbar --> EditMode
 - 速率限制
   - 通用速率限制工具支持窗口与最大请求数配置，便于扩展到评论、投票等场景
 - 编辑工具栏优化
-  - App ID检测功能仅在需要时执行，避免不必要的性能开销
+  - **更新** App ID检测功能优化：增强的服务端App ID检测机制，避免使用过期缓存值，减少认证失败重试
   - 用户界面提示信息采用轻量级实现，不影响编辑体验
+- **更新** Vercel部署优化
+  - Serverless Functions具备自动扩缩容能力，适合突发流量
+  - 冷启动优化，减少首次请求延迟
 
 **章节来源**
 - [src/workers/github-proxy.js:95-154](file://src/workers/github-proxy.js#L95-L154)
@@ -457,11 +464,13 @@ EditToolbar --> EditMode
 
 ## 故障排查指南
 - GitHub代理
-  - 确认环境变量GH_APP_ID与GH_PRIVATE_KEY是否正确配置
-  - 检查CORS头与预检请求是否通过
+  - **更新** Vercel部署配置检查：确认vercel.json中的路由配置正确指向/api/github
+  - 环境变量配置：确认GH_APP_ID与GH_PRIVATE_KEY是否正确配置在Vercel项目设置中
+  - Serverless函数检查：验证api/github.js函数部署状态和日志
+  - Caching与预检：检查CORS头与预检请求是否通过
   - 查看代理错误响应中的message字段定位问题
 - 编辑工具栏
-  - App ID检测失败：检查服务端代理配置，确认GitHub App ID是否正确设置
+  - **更新** App ID检测失败：检查服务端代理配置，确认GitHub App ID是否正确设置，确保使用最新的服务端配置而非过期缓存
   - 私钥导入失败：确认.pem文件格式正确，私钥内容完整
   - 认证状态异常：清除localStorage中的认证信息，重新导入证书
   - 批量提交失败：检查草稿数据完整性，确认GitHub权限配置
@@ -474,8 +483,13 @@ EditToolbar --> EditMode
   - 本地音乐：确认文件路径与跨域访问
 - 速率限制
   - 检查KV存储是否可用，确认窗口与最大请求数配置
+- **新增** Vercel部署相关
+  - 检查Vercel项目构建日志，确认Serverless Functions编译通过
+  - 验证环境变量在Vercel仪表板中的配置状态
+  - 查看Vercel Analytics中的函数执行指标和错误率
 
 **章节来源**
+- [vercel.json:1-50](file://vercel.json#L1-L50)
 - [src/workers/github-proxy.js:156-253](file://src/workers/github-proxy.js#L156-L253)
 - [src/components/edit/EditToolbar.svelte:174-188](file://src/components/edit/EditToolbar.svelte#L174-L188)
 - [src/utils/editMode.ts:285-299](file://src/utils/editMode.ts#L285-L299)
@@ -486,7 +500,7 @@ EditToolbar --> EditMode
 - [src/workers/utils/rate-limit.js:8-44](file://src/workers/utils/rate-limit.js#L8-L44)
 
 ## 结论
-本项目通过配置驱动的方式，将GitHub API、评论系统、音乐播放、收藏夹API与编辑工具栏进行了模块化集成。代理层统一处理认证与CORS，组件层提供灵活的参数化配置与良好的用户体验。新增的编辑工具栏GitHub代理App ID检测功能进一步增强了用户的认证体验，通过智能的App ID检测和增强的用户界面提示信息，使编辑模式下的GitHub认证更加直观和可靠。结合速率限制与故障回退机制，整体具备较好的稳定性与可维护性。
+本项目通过配置驱动的方式，将GitHub API、评论系统、音乐播放、收藏夹API与编辑工具栏进行了模块化集成。**更新** 部署架构已从Cloudflare Workers迁移到Vercel Serverless Functions，提供了更好的自动扩缩容能力和更稳定的运行时环境。代理层统一处理认证与CORS，组件层提供灵活的参数化配置与良好的用户体验。**更新** 新增的编辑工具栏GitHub代理App ID检测功能进一步增强了用户的认证体验，通过智能的App ID检测和增强的用户界面提示信息，使编辑模式下的GitHub认证更加直观和可靠。改进的App ID存储逻辑确保始终使用服务端提供的最新配置，避免使用过期的缓存值，提升了认证的准确性和可靠性。结合速率限制与故障回退机制，整体具备较好的稳定性与可维护性。
 
 ## 附录
 - 配置参数速查
@@ -495,14 +509,18 @@ EditToolbar --> EditMode
   - 音乐播放器：mode、meting、local、volume、playMode、showLyrics
   - 收藏API：apis、categories
   - 编辑工具栏：repoConfig.appId、localStorage存储键值
+  - **更新** Vercel部署：vercel.json路由配置、环境变量设置
 - 集成示例
   - 在管理后台测试GitHub Token有效性
   - 在评论组件中按需启用twikoo、waline或giscus
   - 在音乐配置中选择本地或Meting数据源
   - 在编辑工具栏中导入GitHub App私钥，自动检测App ID
   - 使用增强的用户界面提示信息进行认证状态管理
+  - **更新** 配置Vercel部署：在vercel.json中设置/api/github路由规则
+  - **更新** 确保编辑工具栏使用最新的服务端App ID配置，避免过期缓存影响认证
 
 **章节来源**
+- [vercel.json:1-50](file://vercel.json#L1-L50)
 - [src/pages/admin/index.astro:1358-1639](file://src/pages/admin/index.astro#L1358-L1639)
 - [src/config/commentConfig.ts:1-79](file://src/config/commentConfig.ts#L1-L79)
 - [src/config/musicConfig.ts:1-62](file://src/config/musicConfig.ts#L1-L62)

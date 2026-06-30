@@ -3,13 +3,13 @@
 	import EditToolbar from "./EditToolbar.svelte";
 	import EditToast from "./EditToast.svelte";
 	import {
-		readGistFile,
 		showToast,
 		genId,
 		deepClone,
 		ensureIconify,
+		getRepoFile,
 	} from "@/utils/editMode";
-	import { setupGistDrafts } from "@/utils/draftHelpers";
+	import { setupRepoDrafts } from "@/utils/draftHelpers";
 	import { bangumiEditConfig } from "@/config/editConfig";
 
 	interface BangumiItem {
@@ -46,16 +46,19 @@
 	let editingIndex = $state(-1);
 	let gistLoaded = $state(false);
 	let activeTab = $state(defaultCategory);
-	let gistConfig = $state({ gistId: bangumiEditConfig.gistId, fileName: bangumiEditConfig.fileName });
+	let fileSha = $state<string | null>(null);
 
-	const drafts = setupGistDrafts<BangumiItem[]>({
+	const drafts = setupRepoDrafts({
 		pageKey: "bangumi",
 		pageName: customPageName,
-		getData: () => items,
-		setData: (v) => (items = v),
-		getOriginalData: () => originalItems,
-		setOriginalData: (v) => (originalItems = v),
-		gistConfig,
+		getContent: () => JSON.stringify(items, null, 2),
+		setContent: (v) => (items = JSON.parse(v)),
+		getPath: () => "public/bangumi.json",
+		getSha: () => fileSha,
+		setSha: (v) => (fileSha = v),
+		getOriginalContent: () => JSON.stringify(originalItems, null, 2),
+		setOriginalContent: (v) => (originalItems = JSON.parse(v)),
+		getCommitMsg: (isEdit) => isEdit ? `chore: update bangumi` : `chore: create bangumi`,
 		onSubmitted: () => {
 			setTimeout(() => window.location.reload(), 1200);
 		},
@@ -177,16 +180,13 @@
 			return;
 		}
 		try {
-			const content = await readGistFile(
-				bangumiEditConfig.gistId,
-				bangumiEditConfig.fileName,
-			);
-			if (content) {
-				const gistItems: BangumiItem[] = JSON.parse(content);
+			const existing = await getRepoFile("public/bangumi.json");
+			if (existing && existing.content) {
+				const repoItems: BangumiItem[] = JSON.parse(existing.content);
 				const localKeys = new Set(
 					items.filter((i) => i._local).map((i) => `${i.title}|${i.category}`),
 				);
-				for (const g of gistItems) {
+				for (const g of repoItems) {
 					const key = `${g.title}|${g.category}`;
 					const existingIdx = items.findIndex(
 						(i) => `${i.title}|${i.category}` === key,
@@ -205,7 +205,7 @@
 				originalItems = deepClone(items);
 			}
 		} catch (e) {
-			console.error("Failed to load Gist bangumi:", e);
+			console.error("Failed to load repo bangumi:", e);
 		}
 		gistLoaded = true;
 		renderExternalItems();
