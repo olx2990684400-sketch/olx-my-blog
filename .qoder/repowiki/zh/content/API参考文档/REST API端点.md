@@ -6,7 +6,15 @@
 - [holidays.json.ts](file://src/pages/api/holidays.json.ts)
 - [rss.xml.ts](file://src/pages/rss.xml.ts)
 - [robots.txt.ts](file://src/pages/robots.txt.ts)
+- [github.js](file://api/github.js)
+- [github-proxy.js](file://src/workers/github-proxy.js)
 </cite>
+
+## 更新摘要
+**变更内容**
+- 更新GitHub代理API端点实现架构，从Astro API路由迁移到Edge Functions
+- 修正API架构图以反映新的Edge Functions部署模式
+- 更新GitHub代理API的实现细节和部署配置说明
 
 ## 目录
 1. [简介](#简介)
@@ -14,11 +22,12 @@
 3. [核心组件](#核心组件)
 4. [架构总览](#架构总览)
 5. [详细组件分析](#详细组件分析)
-6. [依赖关系分析](#依赖关系分析)
-7. [性能考虑](#性能考虑)
-8. [故障排除指南](#故障排除指南)
-9. [结论](#结论)
-10. [附录](#附录)
+6. [GitHub代理API](#github代理api)
+7. [依赖关系分析](#依赖关系分析)
+8. [性能考虑](#性能考虑)
+9. [故障排除指南](#故障排除指南)
+10. [结论](#结论)
+11. [附录](#附录)
 
 ## 简介
 本文件面向Firefly-Mod项目的REST API端点，系统性梳理并说明以下静态API端点：
@@ -26,15 +35,17 @@
 - 节假日信息接口（返回节日配置数据）
 - RSS订阅接口（返回站点RSS XML）
 - robots.txt文件接口（返回爬虫规则）
+- GitHub代理API（提供GitHub资源访问代理服务）
 
 文档涵盖每个端点的HTTP方法、URL路径、请求参数、响应格式、状态码说明、请求与响应示例、设计原则、数据格式规范、错误处理机制、最佳实践与性能优化建议。
 
 ## 项目结构
-这些API端点位于Astro页面目录中，采用“页面即API”的方式实现：
+这些API端点位于Astro页面目录中，采用"页面即API"的方式实现：
 - 文章元数据接口：src/pages/api/allPostMeta.json.ts
 - 节假日接口：src/pages/api/holidays.json.ts
 - RSS接口：src/pages/rss.xml.ts
 - robots.txt接口：src/pages/robots.txt.ts
+- GitHub代理API：api/github.js
 
 ```mermaid
 graph TB
@@ -43,16 +54,19 @@ A["文章元数据接口<br/>src/pages/api/allPostMeta.json.ts"]
 B["节假日接口<br/>src/pages/api/holidays.json.ts"]
 C["RSS接口<br/>src/pages/rss.xml.ts"]
 D["robots.txt接口<br/>src/pages/robots.txt.ts"]
+E["GitHub代理API<br/>api/github.js"]
 end
 subgraph "内容与工具层"
-E["内容工具集<br/>src/utils/content-utils.ts"]
-F["日期与节日工具<br/>src/utils/date-utils.ts"]
-G["日历事件工具<br/>src/utils/calendar-events.ts"]
+F["内容工具集<br/>src/utils/content-utils.ts"]
+G["日期与节日工具<br/>src/utils/date-utils.ts"]
+H["日历事件工具<br/>src/utils/calendar-events.ts"]
+I["GitHub代理工作线程<br/>src/workers/github-proxy.js"]
 end
-A --> E
-B --> F
+A --> F
 B --> G
-C --> E
+B --> H
+C --> F
+E --> I
 ```
 
 **图表来源**
@@ -60,28 +74,33 @@ C --> E
 - [holidays.json.ts](file://src/pages/api/holidays.json.ts)
 - [rss.xml.ts](file://src/pages/rss.xml.ts)
 - [robots.txt.ts](file://src/pages/robots.txt.ts)
+- [github.js](file://api/github.js)
+- [github-proxy.js](file://src/workers/github-proxy.js)
 
 **章节来源**
 - [allPostMeta.json.ts](file://src/pages/api/allPostMeta.json.ts)
 - [holidays.json.ts](file://src/pages/api/holidays.json.ts)
 - [rss.xml.ts](file://src/pages/rss.xml.ts)
 - [robots.txt.ts](file://src/pages/robots.txt.ts)
+- [github.js](file://api/github.js)
 
 ## 核心组件
-本节概述四个静态API端点的功能职责与输出特征：
+本节概述五个API端点的功能职责与输出特征：
 - 文章元数据接口：聚合全站文章的元数据，用于索引、归档与展示。
 - 节假日接口：提供节日配置与日历事件映射，支持前端日历与提醒功能。
 - RSS接口：生成站点RSS订阅XML，供阅读器订阅。
 - robots.txt接口：返回爬虫访问控制规则，指导搜索引擎抓取行为。
+- GitHub代理API：提供GitHub资源访问代理服务，解决跨域访问问题。
 
 **章节来源**
 - [allPostMeta.json.ts](file://src/pages/api/allPostMeta.json.ts)
 - [holidays.json.ts](file://src/pages/api/holidays.json.ts)
 - [rss.xml.ts](file://src/pages/rss.xml.ts)
 - [robots.txt.ts](file://src/pages/robots.txt.ts)
+- [github.js](file://api/github.js)
 
 ## 架构总览
-四个API端点均通过Astro页面路由实现，遵循“页面即API”的约定，返回对应的数据或文本内容。它们不直接依赖外部服务，主要依赖本地内容与工具函数进行数据组装与格式化。
+五个API端点均通过Astro页面路由实现，遵循"页面即API"的约定，返回对应的数据或文本内容。其中GitHub代理API通过专用的工作线程实现，其余端点主要依赖本地内容与工具函数进行数据组装与格式化。
 
 ```mermaid
 sequenceDiagram
@@ -91,6 +110,7 @@ participant M as "文章元数据接口"
 participant H as "节假日接口"
 participant X as "RSS接口"
 participant T as "robots.txt接口"
+participant G as "GitHub代理API"
 U->>R : GET /api/allPostMeta.json
 R->>M : 调用处理器
 M-->>R : JSON数据
@@ -107,6 +127,10 @@ U->>R : GET /robots.txt
 R->>T : 调用处理器
 T-->>R : 文本数据
 R-->>U : 200 OK + 文本
+U->>R : GET /api/github
+R->>G : 调用处理器
+G-->>R : GitHub数据
+R-->>U : 200 OK + 数据
 ```
 
 **图表来源**
@@ -114,6 +138,7 @@ R-->>U : 200 OK + 文本
 - [holidays.json.ts](file://src/pages/api/holidays.json.ts)
 - [rss.xml.ts](file://src/pages/rss.xml.ts)
 - [robots.txt.ts](file://src/pages/robots.txt.ts)
+- [github.js](file://api/github.js)
 
 ## 详细组件分析
 
@@ -251,8 +276,73 @@ R-->>U : 200 OK + 文本
 **章节来源**
 - [robots.txt.ts](file://src/pages/robots.txt.ts)
 
+## GitHub代理API
+
+### API概述
+GitHub代理API提供了一个JavaScript实现的GitHub资源访问代理服务，用于解决跨域访问问题和提高资源加载稳定性。该API已从传统的Astro API路由迁移到Edge Functions架构，提供更好的性能和可扩展性。
+
+### 接口规范
+- HTTP方法：GET
+- URL路径：/api/github
+- 请求参数：
+  - `url`：必需，目标GitHub资源的完整URL
+  - `token`：可选，GitHub访问令牌
+- 响应类型：根据目标资源类型动态确定
+- 响应主体：原始GitHub资源内容
+- 状态码：
+  - 200：成功
+  - 400：请求参数无效
+  - 401：认证失败
+  - 500：代理服务器错误
+
+### 实现架构
+GitHub代理API通过Edge Functions实现，采用现代化的无服务器架构，提供更好的性能和可扩展性：
+
+```mermaid
+graph LR
+A["客户端请求<br/>/api/github"] --> B["Edge Functions<br/>api/github.js"]
+B --> C["工作线程<br/>src/workers/github-proxy.js"]
+C --> D["GitHub API<br/>https://api.github.com"]
+D --> C
+C --> B
+B --> A
+```
+
+**图表来源**
+- [github.js](file://api/github.js)
+- [github-proxy.js](file://src/workers/github-proxy.js)
+
+### 设计原则
+- **跨域解决方案**：通过Edge Functions代理绕过浏览器同源策略限制
+- **安全控制**：支持GitHub访问令牌验证，保护私有资源访问
+- **性能优化**：利用Edge Functions的边缘计算能力，就近处理请求
+- **错误处理**：提供详细的错误信息和重试机制
+
+### 数据格式规范
+- 输入参数必须是有效的URL格式
+- 支持GitHub API的所有资源类型
+- 自动处理响应头信息的转发
+- 保持原始资源的完整性
+
+### 错误处理机制
+- URL格式验证失败时返回400状态码
+- GitHub认证失败时返回401状态码
+- 网络超时或连接失败时返回500状态码
+- 提供详细的错误消息和调试信息
+
+### 性能优化建议
+- 利用Edge Functions的全局边缘节点分布，减少延迟
+- 合理设置缓存策略，平衡新鲜度与性能
+- 实施请求限流，防止滥用
+- 使用连接池管理GitHub API连接
+- 实现智能重试机制，提高成功率
+
+**章节来源**
+- [github.js](file://api/github.js)
+- [github-proxy.js](file://src/workers/github-proxy.js)
+
 ## 依赖关系分析
-四个API端点的依赖关系如下：
+五个API端点的依赖关系如下：
 
 ```mermaid
 graph LR
@@ -261,6 +351,7 @@ B["节假日接口<br/>holidays.json.ts"] --> DU["日期工具集<br/>date-utils
 B --> CE["日历事件工具<br/>calendar-events.ts"]
 C["RSS接口<br/>rss.xml.ts"] --> CU
 D["robots.txt接口<br/>robots.txt.ts"]
+E["GitHub代理API<br/>github.js"] --> GP["GitHub代理工作线程<br/>github-proxy.js"]
 ```
 
 **图表来源**
@@ -268,43 +359,59 @@ D["robots.txt接口<br/>robots.txt.ts"]
 - [holidays.json.ts](file://src/pages/api/holidays.json.ts)
 - [rss.xml.ts](file://src/pages/rss.xml.ts)
 - [robots.txt.ts](file://src/pages/robots.txt.ts)
+- [github.js](file://api/github.js)
+- [github-proxy.js](file://src/workers/github-proxy.js)
 
 **章节来源**
 - [allPostMeta.json.ts](file://src/pages/api/allPostMeta.json.ts)
 - [holidays.json.ts](file://src/pages/api/holidays.json.ts)
 - [rss.xml.ts](file://src/pages/rss.xml.ts)
 - [robots.txt.ts](file://src/pages/robots.txt.ts)
+- [github.js](file://api/github.js)
 
 ## 性能考虑
 - 缓存策略
   - 对于文章元数据与节假日接口，建议启用短期缓存（如5-15分钟），以降低内容聚合开销
   - RSS接口可采用更长缓存周期（如1小时），并结合ETag实现条件更新
+  - GitHub代理API建议实施智能缓存策略，根据资源类型和更新频率调整缓存时间
 - 压缩与传输
   - 在网关或服务器侧启用Gzip/Brotli压缩，减小JSON/XML体积
+  - GitHub代理API支持透明压缩，减少带宽消耗
 - 分页与限流
   - 文章元数据接口若数据量较大，建议提供分页参数或分批返回
-  - 结合速率限制，防止恶意爬取
+  - GitHub代理API实施严格的速率限制，防止API滥用
+  - 结合全局限流策略，保护后端服务稳定性
 - CDN与边缘缓存
   - robots.txt与RSS可由CDN缓存，提升全球访问速度
+  - GitHub代理API利用Edge Functions的边缘缓存能力
 - 健康检查
   - 定期探测各接口可用性，确保内容源正常
+  - GitHub代理API实施健康检查，监控上游服务状态
 
 ## 故障排除指南
 - 404 Not Found
   - robots.txt接口：确认页面路由配置正确
+  - GitHub代理API：检查目标URL是否有效
+- 400 Bad Request
+  - GitHub代理API：检查URL参数格式是否正确
+- 401 Unauthorized
+  - GitHub代理API：验证访问令牌有效性
 - 500 Internal Server Error
   - 文章元数据接口：检查内容读取与序列化逻辑
   - 节假日接口：检查节日配置与日历事件工具调用
   - RSS接口：检查内容聚合与XML生成流程
+  - GitHub代理API：检查工作线程状态和网络连接
 - 响应异常
   - JSON格式错误：确认字段命名与时间格式
   - XML格式错误：核对RSS模板与命名空间
+  - GitHub代理API：检查上游API响应格式
 - 日志与监控
   - 记录请求耗时、错误堆栈与异常次数
   - 设置告警阈值，及时发现服务异常
+  - GitHub代理API实施详细的请求追踪
 
 ## 结论
-本文档系统梳理了Firefly-Mod项目的四个静态API端点，明确了其职责、接口规范、数据格式与错误处理机制。通过合理的缓存、压缩与限流策略，可显著提升API的稳定性与性能；同时，遵循标准的RSS与robots.txt规范有助于SEO与内容分发。
+本文档系统梳理了Firefly-Mod项目的五个API端点，明确了其职责、接口规范、数据格式与错误处理机制。特别地，新增的GitHub代理API已从Astro API路由迁移到Edge Functions架构，提供了更好的性能和可扩展性。通过合理的缓存、压缩与限流策略，可显著提升API的稳定性与性能；同时，遵循标准的RSS与robots.txt规范有助于SEO与内容分发。
 
 ## 附录
 - 接口一览
@@ -312,7 +419,10 @@ D["robots.txt接口<br/>robots.txt.ts"]
   - GET /api/holidays.json → 返回节日与事件映射
   - GET /rss.xml → 返回RSS 2.0 XML
   - GET /robots.txt → 返回robots.txt文本
+  - GET /api/github → GitHub资源代理访问
 - 最佳实践
   - 使用条件请求（If-None-Match/If-Modified-Since）减少带宽消耗
   - 对外暴露的接口尽量固定字段与格式，避免破坏性变更
   - 在网关层统一接入鉴权与限流，保障后端稳定
+  - GitHub代理API使用访问令牌保护私有资源
+  - 实施合理的缓存策略，平衡性能与数据新鲜度

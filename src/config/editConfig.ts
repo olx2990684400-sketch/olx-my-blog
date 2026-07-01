@@ -42,6 +42,6 @@ const envAppId = (import.meta as any).env?.PUBLIC_GITHUB_APP_ID || "";
 export const repoConfig = {
 	owner: "fqzlr",
 	repo: "my-blog",
-	branch: "main",
+	branch: "master",
 	appId: envAppId || "",
 };

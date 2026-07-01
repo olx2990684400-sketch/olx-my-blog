@@ -3,13 +3,13 @@
 	import EditToolbar from "./EditToolbar.svelte";
 	import EditToast from "./EditToast.svelte";
 	import {
-		readGistFile,
 		showToast,
 		genId,
 		deepClone,
 		ensureIconify,
+		getRepoFile,
 	} from "@/utils/editMode";
-	import { setupGistDrafts } from "@/utils/draftHelpers";
+	import { setupRepoDrafts } from "@/utils/draftHelpers";
 	import { collectionsEditConfig } from "@/config/editConfig";
 
 	interface CollectionItem {
@@ -34,16 +34,19 @@
 	let editingIndex = $state(-1);
 	let gistLoaded = $state(false);
 	let activeTab = $state("all");
-	let gistConfig = $state({ gistId: collectionsEditConfig.gistId, fileName: collectionsEditConfig.fileName });
+	let fileSha = $state<string | null>(null);
 
-	const drafts = setupGistDrafts<CollectionItem[]>({
+	const drafts = setupRepoDrafts({
 		pageKey: "collections",
 		pageName: "收藏",
-		getData: () => items,
-		setData: (v) => (items = v),
-		getOriginalData: () => originalItems,
-		setOriginalData: (v) => (originalItems = v),
-		gistConfig,
+		getContent: () => JSON.stringify(items, null, 2),
+		setContent: (v) => (items = JSON.parse(v)),
+		getPath: () => "public/collections.json",
+		getSha: () => fileSha,
+		setSha: (v) => (fileSha = v),
+		getOriginalContent: () => JSON.stringify(originalItems, null, 2),
+		setOriginalContent: (v) => (originalItems = JSON.parse(v)),
+		getCommitMsg: (isEdit) => isEdit ? `chore: update collections` : `chore: create collections`,
 		onSubmitted: () => {
 			setTimeout(() => window.location.reload(), 1200);
 		},
@@ -83,16 +86,13 @@
 			return;
 		}
 		try {
-			const content = await readGistFile(
-				collectionsEditConfig.gistId,
-				collectionsEditConfig.fileName,
-			);
-			if (content) {
-				const gistItems: CollectionItem[] = JSON.parse(content);
+			const existing = await getRepoFile("public/collections.json");
+			if (existing && existing.content) {
+				const repoItems: CollectionItem[] = JSON.parse(existing.content);
 				const existingUrls = new Set(
 					items.map((i) => i.url.replace(/\/$/, "")),
 				);
-				for (const g of gistItems) {
+				for (const g of repoItems) {
 					const url = g.url.replace(/\/$/, "");
 					if (!existingUrls.has(url)) {
 						items = [
@@ -105,7 +105,7 @@
 				originalItems = deepClone(items);
 			}
 		} catch (e) {
-			console.error("Failed to load Gist collections:", e);
+			console.error("Failed to load repo collections:", e);
 		}
 		gistLoaded = true;
 		drafts.restoreFromDrafts();

@@ -201,14 +201,36 @@ export function setupRepoDrafts(ctx: RepoDraftContext) {
 	}
 
 	async function doSubmit(content: string, sha: string | null, path: string, isEdit: boolean): Promise<boolean> {
+		const branch = typeof window !== 'undefined' ? window.__DEPLOY_BRANCH__ : undefined;
+		console.log('[RepoDrafts] doSubmit called:', { path, isEdit, hasSha: !!sha, contentLength: content.length, branch });
 		const commitMsg = ctx.getCommitMsg
 			? ctx.getCommitMsg(isEdit)
 			: isEdit ? `chore: update ${pageName}` : `chore: create ${pageName}`;
 		let ok = false;
-		if (isEdit && sha) {
-			ok = await updateRepoFile(path, content, sha, commitMsg);
-		} else {
-			ok = await createRepoFile(path, content, commitMsg);
+		try {
+			// 如果需要更新但没有 sha，先尝试从仓库获取
+			let actualSha = sha;
+			if (isEdit && !actualSha) {
+				console.log('[RepoDrafts] isEdit but no sha, fetching file meta...');
+				const existing = await getRepoFile(path);
+				if (existing && existing.sha) {
+					actualSha = existing.sha;
+					console.log('[RepoDrafts] Got sha from repo:', actualSha);
+				} else {
+					console.log('[RepoDrafts] File does not exist in repo, will create');
+				}
+			}
+			if (isEdit && actualSha) {
+				console.log('[RepoDrafts] Updating existing file...');
+				ok = await updateRepoFile(path, content, actualSha, commitMsg);
+			} else {
+				console.log('[RepoDrafts] Creating new file...');
+				ok = await createRepoFile(path, content, commitMsg);
+			}
+		} catch (error) {
+			console.error('[RepoDrafts] doSubmit error:', error);
+			showToast(`提交 ${pageName} 失败: ${error instanceof Error ? error.message : String(error)}`, "error");
+			return false;
 		}
 		if (ok) {
 			setOriginalContent(content);
@@ -224,22 +246,27 @@ export function setupRepoDrafts(ctx: RepoDraftContext) {
 	}
 
 	async function submitDrafts(): Promise<boolean> {
+		console.log('[RepoDrafts] submitDrafts called');
 		const drafts = getDraftsByPage(pageKey);
 		let contentToSubmit: string;
 		let shaToUse: string | null;
 		let pathToUse: string;
 		let isEdit: boolean;
 		if (drafts.length > 0) {
+			console.log('[RepoDrafts] Found drafts:', drafts.length);
 			const latest = drafts[drafts.length - 1];
 			if (latest.payload?.type === "repo" && latest.payload.content !== undefined) {
 				contentToSubmit = String(latest.payload.content);
 				shaToUse = (latest.payload.sha as string) || null;
 				pathToUse = String(latest.payload.path || getPath());
 				isEdit = !!latest.payload.isEdit;
+				console.log('[RepoDrafts] Using draft data:', { pathToUse, isEdit, hasSha: !!shaToUse });
 			} else {
+				console.error('[RepoDrafts] Invalid draft payload');
 				return false;
 			}
 		} else {
+			console.log('[RepoDrafts] No drafts, using current state');
 			contentToSubmit = getContent();
 			shaToUse = getSha();
 			pathToUse = getPath();

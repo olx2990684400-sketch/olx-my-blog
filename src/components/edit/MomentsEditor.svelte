@@ -3,14 +3,16 @@
 	import EditToolbar from "./EditToolbar.svelte";
 	import EditToast from "./EditToast.svelte";
 	import {
-		readGistFile,
+		getRepoFileMeta,
+		updateRepoFile,
+		createRepoFile,
+		deleteRepoFile,
 		showToast,
 		genId,
 		deepClone,
 		ensureIconify,
 	} from "@/utils/editMode";
-	import { setupGistDrafts } from "@/utils/draftHelpers";
-	import { momentsEditConfig } from "@/config/editConfig";
+	import { setupRepoDrafts } from "@/utils/draftHelpers";
 
 	const props = $props<{
 		initialLocalCount?: number;
@@ -29,6 +31,7 @@
 		_draft?: boolean;
 	}
 
+	const MOMENTS_DIR = "src/content/moments"; // 仓库中的说说目录
 	const DEFAULT_AVATAR = "https://q1.qlogo.cn/g?b=qq&nk=20447289&s=640";
 	const DEFAULT_AUTHOR = "fqzlr";
 
@@ -38,16 +41,19 @@
 	let originalMoments = $state<MomentItem[]>([]);
 	let editingIndex = $state(-1);
 	let gistLoaded = $state(false);
-	let gistConfig = $state({ gistId: momentsEditConfig.gistId, fileName: momentsEditConfig.fileName });
+	let fileSha = $state<string | null>(null);
 
-	const drafts = setupGistDrafts<MomentItem[]>({
+	const drafts = setupRepoDrafts({
 		pageKey: "moments",
 		pageName: "说说",
-		getData: () => moments,
-		setData: (v) => (moments = v),
-		getOriginalData: () => originalMoments,
-		setOriginalData: (v) => (originalMoments = v),
-		gistConfig,
+		getContent: () => JSON.stringify(moments, null, 2),
+		setContent: (v) => (moments = JSON.parse(v)),
+		getPath: () => `${MOMENTS_DIR}/draft.json`, // 草稿文件路径
+		getSha: () => fileSha,
+		setSha: (v) => (fileSha = v),
+		getOriginalContent: () => JSON.stringify(originalMoments, null, 2),
+		setOriginalContent: (v) => (originalMoments = JSON.parse(v)),
+		getCommitMsg: (isEdit) => isEdit ? `chore: update moments` : `chore: create moments`,
 		onSubmitted: () => {
 			setTimeout(() => window.location.reload(), 1200);
 		},
@@ -58,7 +64,7 @@
 	onMount(() => {
 		ensureIconify();
 		collectFromDOM();
-		loadGistData();
+		loadMomentsData();
 	});
 
 	// ========== 从 DOM 收集 SSR 渲染的本地说说 ==========
@@ -132,124 +138,15 @@
 		originalMoments = deepClone(items);
 	}
 
-	// ========== 从 Gist 加载外部说说 ==========
-	async function loadGistData() {
-		if (!momentsEditConfig.gistId) {
-			gistLoaded = true;
-			renderExternalMoments();
-			drafts.restoreFromDrafts();
-			return;
-		}
-		try {
-			const content = await readGistFile(
-				momentsEditConfig.gistId,
-				momentsEditConfig.fileName,
-			);
-			if (content) {
-				const gistItems: MomentItem[] = JSON.parse(content);
-				const localIds = new Set(moments.map((m) => m.id));
-				const merged = [...moments];
-				for (const g of gistItems) {
-					const idx = merged.findIndex((m) => m.id === g.id);
-					if (idx >= 0) {
-						merged[idx] = { ...g, id: g.id || merged[idx].id };
-					} else {
-						merged.push({ ...g, id: g.id || genId("ext") });
-					}
-				}
-				merged.sort((a, b) => {
-					if (a.pinned && !b.pinned) return -1;
-					if (!a.pinned && b.pinned) return 1;
-					return new Date(b.published).getTime() - new Date(a.published).getTime();
-				});
-				moments = merged;
-				originalMoments = deepClone(merged);
-			}
-		} catch (e) {
-			console.error("Failed to load Gist moments:", e);
-		}
+	// ========== 从仓库加载说说数据（仅恢复草稿）==========
+	async function loadMomentsData() {
+		// 方案 B：所有说说都来自 SSR 渲染，不需要从外部 JSON 加载
+		// 只需要恢复本地草稿即可
 		gistLoaded = true;
-		renderExternalMoments();
 		drafts.restoreFromDrafts();
 	}
 
-	// ========== 非编辑模式：将外部说说注入 DOM ==========
-	function renderExternalMoments() {
-		const feed = document.getElementById("moments-feed");
-		if (!feed) return;
-
-		// 清除之前注入的外部说说
-		feed.querySelectorAll(".wx-feed-item-external").forEach((el) => el.remove());
-
-		if (editMode) return; // 编辑模式下不注入
-
-		// 找出需要注入到 DOM 的说说：Gist 中不属于本地 SSR 的
-		// 由于 Gist 保存后会包含所有说说（包括已编辑的本地说说），
-		// 我们只注入那些 SSR 未渲染的（即新增的或原外部的）
-		const localIds = new Set<string>();
-		feed.querySelectorAll<HTMLElement>(".wx-feed-item:not(.wx-feed-item-external)").forEach((el) => {
-			const card = el.querySelector<HTMLElement>(".moment-card");
-			if (card?.id) localIds.add(card.id);
-		});
-
-		// 需要注入的：不在本地 SSR 列表中的
-		const externalItems = moments.filter((m) => !localIds.has(m.id));
-
-		const firstLocal = feed.querySelector(".wx-feed-item:not(.wx-feed-item-external)");
-
-		for (const m of externalItems) {
-			const item = document.createElement("div");
-			item.className = "wx-feed-item wx-feed-item-external";
-			item.dataset.momentId = m.id;
-			item.dataset.published = m.published;
-			item.innerHTML = buildMomentHTML(m);
-			if (firstLocal) {
-				feed.insertBefore(item, firstLocal);
-			} else {
-				feed.appendChild(item);
-			}
-		}
-	}
-
-	function buildMomentHTML(m: MomentItem): string {
-		const avatar = m.avatar || DEFAULT_AVATAR;
-		const author = m.author || DEFAULT_AUTHOR;
-		const timeStr = formatTime(m.published);
-		const locStr = m.location ? " · " + escapeHtml(m.location) : "";
-		const imgCount = Math.min(m.images?.length || 0, 9);
-		const imgsHTML = imgCount > 0
-			? `<div class="wx-imgs wx-imgs-${imgCount}">${m.images!.slice(0, 9).map((src) => `<img src="${escapeHtml(src)}" alt="" class="wx-img" loading="lazy" />`).join("")}</div>`
-			: "";
-		const tagsHTML = m.tags && m.tags.length > 0
-			? `<div class="wx-feed-tags">${m.tags.map((t) => `<span class="wx-tag">#${escapeHtml(t)}</span>`).join("")}</div>`
-			: "";
-		const pinnedHTML = m.pinned
-			? `<span class="wx-pinned-badge"><iconify-icon icon="material-symbols:push-pin"></iconify-icon> 置顶</span>`
-			: "";
-
-		return `
-			<div class="wx-feed-header">
-				<img class="wx-avatar" src="${avatar}" alt="avatar" />
-				<div class="wx-feed-user">
-					<div class="wx-username">${escapeHtml(author)}${pinnedHTML}</div>
-					<div class="wx-feed-time">${timeStr}${locStr}</div>
-				</div>
-			</div>
-			<div class="wx-feed-content">
-				<p>${escapeHtml(m.content)}</p>
-				${imgsHTML}
-				${tagsHTML}
-			</div>
-		`;
-	}
-
-	function escapeHtml(text: string): string {
-		if (!text) return "";
-		const div = document.createElement("div");
-		div.textContent = text;
-		return div.innerHTML;
-	}
-
+	// ========== 时间格式化 ==========
 	function formatTime(iso: string): string {
 		try {
 			return new Date(iso).toLocaleString("zh-CN", {
@@ -264,6 +161,128 @@
 		}
 	}
 
+	// ========== Markdown 转换工具 ==========
+	// YAML 字符串安全转义（加引号防止数字/布尔值被误解析）
+	function yamlStr(val: string): string {
+		return `"${val.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+	}
+
+	// 去掉 YAML 双引号包裹
+	function unquoteYaml(val: string): string {
+		if (!val) return val;
+		const trimmed = val.trim();
+		if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+			return trimmed.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+		}
+		return trimmed;
+	}
+
+	/**
+	 * 将 MomentItem 转换为 Markdown 文件内容
+	 */
+	function momentToMarkdown(m: MomentItem, filename: string): string {
+		const frontmatter = [
+			'---',
+			`author: ${yamlStr(m.author || DEFAULT_AUTHOR)}`,
+			`avatar: ${yamlStr(m.avatar || DEFAULT_AVATAR)}`,
+			`published: ${new Date(m.published).toISOString().split('T')[0]}`, // YYYY-MM-DD
+		];
+
+		if (m.tags && m.tags.length > 0) {
+			frontmatter.push('tags:');
+			for (const tag of m.tags) {
+				frontmatter.push(`  - ${yamlStr(tag)}`);
+			}
+		}
+
+		if (m.location) {
+			frontmatter.push(`location: ${yamlStr(m.location)}`);
+		}
+
+		if (m.pinned) {
+			frontmatter.push('pinned: true');
+		}
+
+		frontmatter.push('---');
+		frontmatter.push(''); // 空行
+		frontmatter.push(m.content); // 正文内容
+
+		return frontmatter.join('\n');
+	}
+
+	/**
+	 * 从 Markdown 文件内容解析为 MomentItem
+	 */
+	function parseMarkdownToMoment(content: string, filename: string): MomentItem | null {
+		try {
+			// 提取 Frontmatter
+			const fmMatch = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+			if (!fmMatch) return null;
+
+			const fmContent = fmMatch[1];
+			const body = fmMatch[2].trim();
+
+			// 解析 Frontmatter
+			const author = unquoteYaml(fmContent.match(/^author:\s*(.+)$/m)?.[1] || '') || DEFAULT_AUTHOR;
+			const avatar = unquoteYaml(fmContent.match(/^avatar:\s*(.+)$/m)?.[1] || '') || DEFAULT_AVATAR;
+			const publishedStr = fmContent.match(/^published:\s*(.+)$/m)?.[1]?.trim();
+			const location = unquoteYaml(fmContent.match(/^location:\s*(.+)$/m)?.[1] || '') || undefined;
+			const pinned = fmContent.match(/^pinned:\s*true$/m) !== null;
+
+			// 解析 tags（多行格式）
+			const tags: string[] = [];
+			const tagsMatch = fmContent.match(/^tags:\n((?:\s+- .+\n?)+)/m);
+			if (tagsMatch) {
+				const tagLines = tagsMatch[1].match(/-\s+(.+)/g);
+				if (tagLines) {
+					for (const line of tagLines) {
+						const tag = unquoteYaml(line.replace(/^-\s+/, ''));
+						if (tag) tags.push(tag);
+					}
+				}
+			}
+
+			// 生成 ID（从文件名提取或使用内容哈希）
+			const id = `loc-${filename.replace('.md', '')}`;
+
+			// 解析发布时间
+			let published = new Date().toISOString();
+			if (publishedStr) {
+				// 尝试解析 YYYY-MM-DD 或 ISO 格式
+				const date = new Date(publishedStr);
+				if (!isNaN(date.getTime())) {
+					published = date.toISOString();
+				}
+			}
+
+			return {
+				id,
+				content: body,
+				published,
+				images: [], // Markdown 中不存储图片，需要从内容中提取或手动添加
+				tags,
+				location,
+				pinned,
+				author,
+				avatar,
+			};
+		} catch (e) {
+			console.error('Failed to parse markdown:', e);
+			return null;
+		}
+	}
+
+	/**
+	 * 根据说说内容生成文件名
+	 */
+	function generateFilename(m: MomentItem): string {
+		// 使用日期 + 内容前缀作为文件名
+		const date = new Date(m.published);
+		const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+		const contentPrefix = m.content.slice(0, 10).replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '');
+		return `${contentPrefix || 'moment'}${dateStr}.md`;
+	}
+
 	// ========== 编辑模式切换 ==========
 	function handleModeChange(e: CustomEvent) {
 		editMode = e.detail.editing;
@@ -272,7 +291,6 @@
 			editingIndex = -1;
 		} else {
 			showSSRFeed();
-			renderExternalMoments();
 		}
 	}
 
@@ -292,7 +310,6 @@
 		drafts.clearDrafts();
 		editingIndex = -1;
 		showSSRFeed();
-		renderExternalMoments();
 	}
 
 	// ========== 开始内联编辑 ==========
@@ -432,12 +449,17 @@
 	}
 
 	async function handleSubmit() {
+		const branch = typeof window !== 'undefined' ? window.__DEPLOY_BRANCH__ : undefined;
+		console.log("[MomentsEditor] handleSubmit called, branch:", branch);
+
 		if (editingIndex >= 0) {
 			finishEdit(editingIndex);
 			if (editingIndex >= 0) return;
 		}
 		saving = true;
 		try {
+			console.log("[MomentsEditor] Processing", moments.length, "moments");
+
 			const cleanData: MomentItem[] = moments.map(({ _draft, ...rest }) => ({
 				id: rest.id || genId("wx"),
 				content: rest.content,
@@ -450,11 +472,78 @@
 				avatar: rest.avatar?.trim() || DEFAULT_AVATAR,
 			}));
 			moments = cleanData;
-			await drafts.submitDrafts();
+
+			// 方案 B：将每个说说保存为独立的 Markdown 文件（使用代理 API）
+			let successCount = 0;
+			let failCount = 0;
+			const errors: string[] = [];
+
+			for (const m of cleanData) {
+				const filename = generateFilename(m);
+				const filepath = `${MOMENTS_DIR}/${filename}`;
+				const mdContent = momentToMarkdown(m, filename);
+
+				console.log(`[MomentsEditor] Saving ${filepath}`);
+
+				try {
+					const commitMsg = `feat(moments): ${m.pinned ? '置顶' : '更新'}说说 - ${m.content.slice(0, 20)}`;
+					// 使用代理 API 检查文件是否存在
+					const existing = await getRepoFileMeta(filepath);
+					let ok: boolean;
+					if (existing) {
+						// 文件存在，更新
+						ok = await updateRepoFile(filepath, mdContent, existing.sha, commitMsg);
+					} else {
+						// 文件不存在，创建
+						ok = await createRepoFile(filepath, mdContent, commitMsg);
+					}
+					if (ok) {
+						successCount++;
+						console.log(`[MomentsEditor] Successfully saved ${filepath}`);
+					} else {
+						failCount++;
+						errors.push(`${filename}: API 返回失败`);
+						console.error(`[MomentsEditor] Failed to save ${filepath}: API returned false`);
+					}
+				} catch (e: any) {
+					failCount++;
+					errors.push(`${filename}: ${e.message}`);
+					console.error(`[MomentsEditor] Failed to save ${filepath}:`, e);
+				}
+			}
+
+			console.log(`[MomentsEditor] Submit complete: success=${successCount}, fail=${failCount}`);
+
+			if (failCount === 0) {
+				showToast(`成功提交 ${successCount} 条说说到 GitHub`, "success");
+
+				// 尝试删除旧的 public/moments.json 文件
+				try {
+					const oldFile = await getRepoFileMeta("public/moments.json");
+					if (oldFile) {
+						await deleteRepoFile("public/moments.json", oldFile.sha, "chore: remove old moments.json (migrated to markdown)");
+						console.log("[MomentsEditor] Deleted old public/moments.json");
+					}
+				} catch (e) {
+					console.log("[MomentsEditor] Old public/moments.json not found or already deleted");
+				}
+
+				// 清除草稿
+				drafts.clearDrafts();
+				// 刷新页面以显示最新内容
+				setTimeout(() => window.location.reload(), 1500);
+			} else {
+				showToast(`提交完成：成功 ${successCount}，失败 ${failCount}`, "warning");
+				console.error("提交错误:", errors);
+			}
+		} catch (e: any) {
+			showToast(`提交失败: ${e.message}`, "error");
+			console.error("[MomentsEditor] handleSubmit error:", e);
 		} finally {
 			saving = false;
 		}
 	}
+
 </script>
 
 <EditToast />
@@ -707,19 +796,6 @@
 
 	.edit-wx-feed-item {
 		position: relative;
-		padding: 16px 20px;
-		border-radius: 16px;
-		background: var(--card-bg, white);
-		border: 1px solid var(--border, rgba(0, 0, 0, 0.08));
-		transition: all 0.2s;
-	}
-	:global(.dark) .edit-wx-feed-item {
-		background: rgba(23, 23, 23, 0.8);
-		border-color: rgba(255, 255, 255, 0.08);
-	}
-	.edit-wx-feed-item:hover {
-		border-color: hsla(var(--theme-hue, 165), 70%, 50%, 0.3);
-		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
 	}
 	.edit-wx-feed-item-draft {
 		border-style: dashed;
@@ -780,15 +856,27 @@
 	}
 
 	/* ============================================
-	 * wx- 前缀：朋友圈风格卡片
+	 * wx- 前缀：朋友圈风格卡片（:global 用于动态注入的 DOM）
 	 * ============================================ */
-	.wx-feed-header {
+	:global(.wx-feed-item) {
+		position: relative;
+		margin-bottom: 20px;
+		padding: 16px;
+		background: var(--bg-color, white);
+		border-radius: 12px;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+	}
+	:global(.dark .wx-feed-item) {
+		background: #1a1a2e;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+	}
+	:global(.wx-feed-header) {
 		display: flex;
 		align-items: flex-start;
 		gap: 10px;
 		margin-bottom: 10px;
 	}
-	.wx-avatar {
+	:global(.wx-avatar) {
 		width: 40px;
 		height: 40px;
 		border-radius: 8px;
@@ -796,11 +884,11 @@
 		flex-shrink: 0;
 		background: var(--btn-regular-bg, #f3f4f6);
 	}
-	.wx-feed-user {
+	:global(.wx-feed-user) {
 		flex: 1;
 		min-width: 0;
 	}
-	.wx-username {
+	:global(.wx-username) {
 		font-size: 14px;
 		font-weight: 600;
 		color: hsl(var(--theme-hue, 165), 70%, 40%);
@@ -809,10 +897,10 @@
 		gap: 6px;
 		flex-wrap: wrap;
 	}
-	:global(.dark) .wx-username {
+	:global(.dark .wx-username) {
 		color: hsl(var(--theme-hue, 165), 70%, 60%);
 	}
-	.wx-pinned-badge {
+	:global(.wx-pinned-badge) {
 		display: inline-flex;
 		align-items: center;
 		gap: 2px;
@@ -823,10 +911,10 @@
 		font-size: 11px;
 		font-weight: 500;
 	}
-	:global(.dark) .wx-pinned-badge {
+	:global(.dark .wx-pinned-badge) {
 		color: hsl(var(--theme-hue, 165), 70%, 60%);
 	}
-	.wx-feed-time {
+	:global(.wx-feed-time) {
 		font-size: 12px;
 		color: var(--content-meta, #9ca3af);
 		margin-top: 2px;
@@ -834,14 +922,14 @@
 		align-items: center;
 		gap: 4px;
 	}
-	.wx-location-dot {
+	:global(.wx-location-dot) {
 		opacity: 0.5;
 	}
 
-	.wx-feed-content {
+	:global(.wx-feed-content) {
 		padding-left: 50px;
 	}
-	.wx-content-text {
+	:global(.wx-content-text) {
 		margin: 0 0 10px;
 		font-size: 14px;
 		line-height: 1.7;
@@ -849,56 +937,56 @@
 		word-break: break-word;
 		white-space: pre-wrap;
 	}
-	:global(.dark) .wx-content-text {
+	:global(.dark .wx-content-text) {
 		color: #e5e7eb;
 	}
 
 	/* 图片网格 */
-	.wx-imgs {
+	:global(.wx-imgs) {
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);
 		gap: 4px;
 		margin-bottom: 10px;
 		max-width: 330px;
 	}
-	.wx-img-wrap {
+	:global(.wx-img-wrap) {
 		position: relative;
 		aspect-ratio: 1;
 		border-radius: 4px;
 		overflow: hidden;
 		background: var(--btn-regular-bg, #f3f4f6);
 	}
-	.wx-img {
+	:global(.wx-img) {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
 		display: block;
 	}
 	/* 单张图片时较大显示 */
-	.wx-imgs-1 {
+	:global(.wx-imgs-1) {
 		grid-template-columns: 180px;
 		max-width: 180px;
 	}
-	.wx-imgs-1 .wx-img-wrap {
+	:global(.wx-imgs-1 .wx-img-wrap) {
 		aspect-ratio: auto;
 		max-height: 240px;
 	}
-	.wx-imgs-1 .wx-img {
+	:global(.wx-imgs-1 .wx-img) {
 		object-fit: contain;
 	}
 
 	/* 标签 */
-	.wx-feed-tags {
+	:global(.wx-feed-tags) {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 6px;
 		padding-top: 8px;
 		border-top: 1px solid var(--border, rgba(0, 0, 0, 0.06));
 	}
-	:global(.dark) .wx-feed-tags {
+	:global(.dark .wx-feed-tags) {
 		border-top-color: rgba(255, 255, 255, 0.06);
 	}
-	.wx-tag {
+	:global(.wx-tag) {
 		padding: 2px 10px;
 		border: 1px solid hsl(var(--theme-hue, 165), 60%, 60%);
 		border-radius: 999px;
@@ -907,7 +995,7 @@
 		background: color-mix(in srgb, hsl(var(--theme-hue, 165), 70%, 50%) 6%, transparent);
 		cursor: default;
 	}
-	:global(.dark) .wx-tag {
+	:global(.dark .wx-tag) {
 		color: hsl(var(--theme-hue, 165), 70%, 60%);
 		border-color: hsla(var(--theme-hue, 165), 70%, 50%, 0.4);
 	}
@@ -1080,7 +1168,7 @@
 
 	/* 响应式 */
 	@media (max-width: 480px) {
-		.wx-feed-content {
+		:global(.wx-feed-content) {
 			padding-left: 0;
 			margin-top: 10px;
 		}
@@ -1088,7 +1176,7 @@
 			flex-direction: column;
 			gap: 0;
 		}
-		.wx-imgs {
+		:global(.wx-imgs) {
 			max-width: 100%;
 		}
 	}

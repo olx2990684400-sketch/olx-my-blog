@@ -186,7 +186,8 @@
 		const result = await validateCredentials(appIdToUse, pemToUse);
 		validating = false;
 		if (result.ok) {
-			if (!repoConfigHasAppId()) setStoredAppId(appIdToUse);
+			// 始终保存验证成功的 App ID
+			setStoredAppId(appIdToUse);
 			if (pendingKeyPem) setStoredPrivateKey(pemToUse);
 			authed = true;
 			showKeyModal = false;
@@ -255,8 +256,12 @@
 			} else {
 				showToast(`提交完成：成功 ${result.success}，失败 ${result.failed}`, "warning");
 			}
+			// 如果当前页面被提交了，刷新页面
+			if (pageKey && result.submittedPageKeys.has(pageKey)) {
+				setTimeout(() => window.location.reload(), 1200);
+			}
 		} catch (e: any) {
-			batchResult = { success: 0, failed: 1, errors: [e?.message || "未知错误"] };
+			batchResult = { success: 0, failed: 1, errors: [e?.message || "未知错误"], submittedPageKeys: new Set() };
 		} finally {
 			submittingBatch = false;
 		}

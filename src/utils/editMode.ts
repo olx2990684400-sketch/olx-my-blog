@@ -2,7 +2,7 @@
  * 鍦ㄧ嚎缂栬緫妯″紡 - 鏍稿績宸ュ叿搴�
  * 鍓嶇�瀵煎叆 GitHub App 绉侀挜璁よ瘉锛�
  * 1. 鐢ㄦ埛鍦ㄦ祻瑙堝櫒瀵煎叆 .pem 绉侀挜鏂囦欢骞惰緭鍏� App ID
- * 2. 娴忚�鍣ㄧ�浣跨敤 Web Crypto API 杩涜� JWT 绛惧悕
+ * 2. 娴忚�鍣ㄧ�浣跨敤 Web Crypto API 杩涜� JWT 绞惧悕
  * 3. 閫氳繃 /api/github 浠ｇ悊杞�彂璇锋眰锛堣В鍐矯ORS闂��锛�
  * 4. 绉侀挜浠呬繚瀛樺湪娴忚�鍣ㄥ唴瀛�/localStorage涓�紝涓嶄笂浼犳湇鍔″櫒
  */
@@ -236,7 +236,7 @@ export function invalidateToken(): void {
 	tokenExpiresAt = 0;
 }
 
-// ============ 鍑�嵁绠＄悊 ============
+// ============ 鍑�ERCHANTABILITY ============
 
 export function getStoredAppId(): string {
 	try {
@@ -329,6 +329,49 @@ export async function githubApi(
 	return proxyRequest(method, apiPath, body);
 }
 
+/** 诊断：检查 GitHub App 安装权限 */
+export async function diagnosePermissions(): Promise<{
+	permissions: Record<string, string>;
+	repoAccess: boolean;
+	tokenValid: boolean;
+}> {
+	const result = { permissions: {} as Record<string, string>, repoAccess: false, tokenValid: false };
+	try {
+		// 检查 token 是否有效
+		const userResp = await proxyRequest("GET", "user");
+		result.tokenValid = userResp.ok;
+		if (!userResp.ok) {
+			console.error("[diagnose] Token invalid:", userResp.status);
+			return result;
+		}
+		const user = await userResp.json();
+		console.log("[diagnose] Authenticated as:", user.login || user.type);
+
+		// 检查仓库访问权限
+		const repoResp = await proxyRequest("GET", `repos/${repoConfig.owner}/${repoConfig.repo}`);
+		result.repoAccess = repoResp.ok;
+		if (repoResp.ok) {
+			const repo = await repoResp.json();
+			console.log("[diagnose] Repo access OK, permissions:", repo.permissions);
+		} else {
+			console.error("[diagnose] Repo access failed:", repoResp.status);
+		}
+
+		// 尝试获取 installation 信息
+		const instResp = await proxyRequest("GET", `repos/${repoConfig.owner}/${repoConfig.repo}/installation`);
+		if (instResp.ok) {
+			const inst = await instResp.json();
+			result.permissions = inst.permissions || {};
+			console.log("[diagnose] Installation permissions:", JSON.stringify(inst.permissions));
+		} else {
+			console.error("[diagnose] Installation info failed:", instResp.status);
+		}
+	} catch (e) {
+		console.error("[diagnose] Error:", e);
+	}
+	return result;
+}
+
 // ============ 鍏煎�鏃�PI ============
 
 export function getStoredToken(): string {
@@ -358,10 +401,8 @@ export async function checkProxyConfigured(): Promise<boolean> {
 		// 服务端有 App ID 但没有 PEM，客户端只需导入 PEM
 		if (data.hasAppId && data.appId) {
 			proxyAppIdAvailable = true;
-			// 将服务端 App ID 存入 localStorage，供客户端 JWT 签名使用
-			if (!getStoredAppId()) {
-				setStoredAppId(data.appId);
-			}
+			// 始终用服务端 App ID 更新存储值，避免使用过期的旧值
+			setStoredAppId(data.appId);
 		}
 		return hasValidCredentials();
 	} catch {
@@ -449,12 +490,17 @@ function repoPath(config: RepoConfig, path: string): string {
 	return `repos/${config.owner}/${config.repo}/contents/${path}`;
 }
 
+/** 动态解析目标分支：优先使用部署分支，回退到配置分支 */
+function resolveBranch(config: RepoConfig): string {
+	return (typeof window !== 'undefined' && window.__DEPLOY_BRANCH__) || config.branch;
+}
+
 export async function getRepoFile(
 	path: string,
 	config: RepoConfig = repoConfig,
 ): Promise<{ content: string; sha: string } | null> {
 	try {
-		const resp = await proxyRequest("GET", `${repoPath(config, path)}?ref=${config.branch}`);
+		const resp = await proxyRequest("GET", `${repoPath(config, path)}?ref=${resolveBranch(config)}`);
 		if (!resp.ok) return null;
 		const data = await resp.json();
 		const content = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ""))));
@@ -473,15 +519,22 @@ export async function updateRepoFile(
 ): Promise<boolean> {
 	try {
 		const encodedContent = btoa(unescape(encodeURIComponent(content)));
-		const resp = await proxyRequest("PUT", repoPath(config, path), {
+		const apiPath = repoPath(config, path);
+		console.log('[updateRepoFile] PUT', apiPath, 'sha:', sha?.slice(0, 8), 'branch:', resolveBranch(config));
+		const resp = await proxyRequest("PUT", apiPath, {
 			message,
 			content: encodedContent,
 			sha,
-			branch: config.branch,
+			branch: resolveBranch(config),
 		});
-		if (!resp.ok) invalidateToken();
+		if (!resp.ok) {
+			const errText = await resp.text().catch(() => "");
+			console.error('[updateRepoFile] Failed:', resp.status, errText);
+			invalidateToken();
+		}
 		return resp.ok;
-	} catch {
+	} catch (e) {
+		console.error('[updateRepoFile] Exception:', e);
 		invalidateToken();
 		return false;
 	}
@@ -495,14 +548,21 @@ export async function createRepoFile(
 ): Promise<boolean> {
 	try {
 		const encodedContent = btoa(unescape(encodeURIComponent(content)));
-		const resp = await proxyRequest("PUT", repoPath(config, path), {
+		const apiPath = repoPath(config, path);
+		console.log('[createRepoFile] PUT', apiPath, 'branch:', resolveBranch(config), 'msg:', message);
+		const resp = await proxyRequest("PUT", apiPath, {
 			message,
 			content: encodedContent,
-			branch: config.branch,
+			branch: resolveBranch(config),
 		});
-		if (!resp.ok) invalidateToken();
+		if (!resp.ok) {
+			const errText = await resp.text().catch(() => "");
+			console.error('[createRepoFile] Failed:', resp.status, errText);
+			invalidateToken();
+		}
 		return resp.ok;
-	} catch {
+	} catch (e) {
+		console.error('[createRepoFile] Exception:', e);
 		invalidateToken();
 		return false;
 	}
@@ -518,7 +578,7 @@ export async function deleteRepoFile(
 		const resp = await proxyRequest("DELETE", repoPath(config, path), {
 			message,
 			sha,
-			branch: config.branch,
+			branch: resolveBranch(config),
 		});
 		if (!resp.ok) invalidateToken();
 		return resp.ok;
@@ -544,13 +604,13 @@ export async function uploadImageToRepo(
 				message,
 				content: base64Content,
 				sha: existing.sha,
-				branch: config.branch,
+				branch: resolveBranch(config),
 			});
 		} else {
 			resp = await proxyRequest("PUT", repoPath(config, imagePath), {
 				message,
 				content: base64Content,
-				branch: config.branch,
+				branch: resolveBranch(config),
 			});
 		}
 		if (!resp.ok) {
@@ -558,7 +618,7 @@ export async function uploadImageToRepo(
 			const text = await resp.text().catch(() => "");
 			throw new Error(`涓婁紶澶辫触 (${resp.status}): ${text}`);
 		}
-		return `https://raw.githubusercontent.com/${config.owner}/${config.repo}/${config.branch}/${imagePath}`;
+		return `https://raw.githubusercontent.com/${config.owner}/${config.repo}/${resolveBranch(config)}/${imagePath}`;
 	} catch (e) {
 		console.error("鍥剧墖涓婁紶澶辫触:", e);
 		return null;
@@ -571,7 +631,7 @@ export async function getRepoFileMeta(
 	config: RepoConfig = repoConfig,
 ): Promise<{ sha: string; size: number } | null> {
 	try {
-		const resp = await proxyRequest("GET", `${repoPath(config, path)}?ref=${config.branch}`);
+		const resp = await proxyRequest("GET", `${repoPath(config, path)}?ref=${resolveBranch(config)}`);
 		if (!resp.ok) return null;
 		const data = await resp.json();
 		return { sha: data.sha, size: data.size || 0 };
@@ -586,7 +646,7 @@ export async function listRepoFiles(
 	config: RepoConfig = repoConfig,
 ): Promise<Array<{ name: string; path: string; sha: string; size: number }>> {
 	try {
-		const resp = await proxyRequest("GET", `${repoPath(config, dirPath)}?ref=${config.branch}`);
+		const resp = await proxyRequest("GET", `${repoPath(config, dirPath)}?ref=${resolveBranch(config)}`);
 		if (!resp.ok) return [];
 		const items = await resp.json();
 		if (!Array.isArray(items)) return [];
@@ -604,7 +664,7 @@ export async function getRepoFileBase64(
 	config: RepoConfig = repoConfig,
 ): Promise<string | null> {
 	try {
-		const resp = await proxyRequest("GET", `${repoPath(config, path)}?ref=${config.branch}`);
+		const resp = await proxyRequest("GET", `${repoPath(config, path)}?ref=${resolveBranch(config)}`);
 		if (!resp.ok) return null;
 		const data = await resp.json();
 		return data.content.replace(/\n/g, "");
@@ -624,7 +684,7 @@ export async function createRepoFileRawBase64(
 		const resp = await proxyRequest("PUT", repoPath(config, path), {
 			message,
 			content: base64Content,
-			branch: config.branch,
+			branch: resolveBranch(config),
 		});
 		if (!resp.ok) invalidateToken();
 		return resp.ok;
@@ -768,19 +828,20 @@ export function registerSubmitHandler(pageKey: string, handler: SubmitHandler): 
 	submitHandlers.set(pageKey, handler);
 }
 
-export async function submitAllDrafts(): Promise<{ success: number; failed: number; errors: string[] }> {
+export async function submitAllDrafts(): Promise<{ success: number; failed: number; errors: string[]; submittedPageKeys: Set<string> }> {
 	const token = await getAuthToken();
 	if (!token) {
-		return { success: 0, failed: 0, errors: ["鏈��璇侊紝璇峰厛瀵煎叆绉侀挜"] };
+		return { success: 0, failed: 0, errors: ["未认证，请先导入私钥"], submittedPageKeys: new Set() };
 	}
 	const drafts = getAllDrafts();
 	const success: string[] = [];
 	const errors: string[] = [];
 	const toRemove: string[] = [];
+	const submittedPageKeys = new Set<string>();
 	for (const draft of drafts) {
 		const handler = submitHandlers.get(draft.pageKey);
 		if (!handler) {
-			errors.push(`${draft.pageName}: 鏆備笉鏀�寔鎻愪氦`);
+			errors.push(`${draft.pageName}: 暂不支持提交`);
 			continue;
 		}
 		try {
@@ -788,11 +849,12 @@ export async function submitAllDrafts(): Promise<{ success: number; failed: numb
 			if (ok) {
 				success.push(draft.id);
 				toRemove.push(draft.id);
+				submittedPageKeys.add(draft.pageKey);
 			} else {
-				errors.push(`${draft.description}: 鎻愪氦澶辫触`);
+				errors.push(`${draft.description}: 提交失败`);
 			}
 		} catch (e: any) {
-			errors.push(`${draft.description}: ${e?.message || "鏈�煡閿欒�"}`);
+			errors.push(`${draft.description}: ${e?.message || "未知错误"}`);
 		}
 	}
 	if (toRemove.length > 0) {
@@ -800,7 +862,7 @@ export async function submitAllDrafts(): Promise<{ success: number; failed: numb
 		store.changes = store.changes.filter(c => !toRemove.includes(c.id));
 		writeDraftStore(store);
 	}
-	return { success: success.length, failed: errors.length, errors };
+	return { success: success.length, failed: errors.length, errors, submittedPageKeys };
 }
 
 export function onDraftsChanged(callback: (count: number) => void): () => void {

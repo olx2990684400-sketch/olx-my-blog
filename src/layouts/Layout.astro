@@ -21,6 +21,11 @@ import "@/styles/variables.styl";
 import "@/styles/markdown-extend.styl";
 import "@rehype-callouts-theme";
 
+// 部署环境检测（Vercel: production/preview/development）
+const deployEnv = process.env.VERCEL_ENV || import.meta.env.MODE || 'development';
+// 当前部署分支（Vercel 自动设置，例如 master 或 feature/frontend-editing）
+const deployBranch = process.env.VERCEL_GIT_COMMIT_REF || 'master';
+
 interface Props {
 	title?: string;
 	banner?: string;
@@ -167,6 +172,13 @@ const siteLang = lang.replace("_", "-");
       const hue = localStorage.getItem("hue") || configHue;
       document.documentElement.style.setProperty("--hue", hue);
     </script>
+
+    {/* 部署环境全局变量（供编辑器组件检测是否为生产环境） */}
+    <script is:inline define:vars={{ deployEnv, deployBranch }}>
+      window.__DEPLOY_ENV__ = deployEnv;
+      window.__DEPLOY_BRANCH__ = deployBranch;
+    </script>
+
     <style
       define:vars={{
         configHue,
