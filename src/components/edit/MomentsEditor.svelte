@@ -436,6 +436,7 @@
 	}
 
 	async function handleSubmit() {
+		console.log("[MomentsEditor] handleSubmit called");
 		if (editingIndex >= 0) {
 			finishEdit(editingIndex);
 			if (editingIndex >= 0) return;
@@ -447,6 +448,8 @@
 				showToast("未认证，请先导入私钥", "error");
 				return;
 			}
+
+			console.log("[MomentsEditor] Token obtained, processing", moments.length, "moments");
 
 			const cleanData: MomentItem[] = moments.map(({ _draft, ...rest }) => ({
 				id: rest.id || genId("wx"),
@@ -471,16 +474,22 @@
 				const filepath = `${MOMENTS_DIR}/${filename}`;
 				const mdContent = momentToMarkdown(m, filename);
 
+				console.log(`[MomentsEditor] Saving ${filepath}`);
+
 				try {
 					// 检查文件是否已存在（通过 ID 匹配）
 					// 这里简化处理：直接创建/更新文件
 					await createOrUpdateRepoFile(filepath, mdContent, repoConfig, token, `feat(moments): ${m.pinned ? '置顶' : '更新'}说说 - ${m.content.slice(0, 20)}`);
 					successCount++;
+					console.log(`[MomentsEditor] Successfully saved ${filepath}`);
 				} catch (e: any) {
 					failCount++;
 					errors.push(`${filename}: ${e.message}`);
+					console.error(`[MomentsEditor] Failed to save ${filepath}:`, e);
 				}
 			}
+
+			console.log(`[MomentsEditor] Submit complete: success=${successCount}, fail=${failCount}`);
 
 			if (failCount === 0) {
 				showToast(`成功提交 ${successCount} 条说说到 GitHub`, "success");
@@ -494,7 +503,7 @@
 			}
 		} catch (e: any) {
 			showToast(`提交失败: ${e.message}`, "error");
-			console.error(e);
+			console.error("[MomentsEditor] handleSubmit error:", e);
 		} finally {
 			saving = false;
 		}
