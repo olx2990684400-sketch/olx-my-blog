@@ -490,12 +490,17 @@ function repoPath(config: RepoConfig, path: string): string {
 	return `repos/${config.owner}/${config.repo}/contents/${path}`;
 }
 
+/** 动态解析目标分支：优先使用部署分支，回退到配置分支 */
+function resolveBranch(config: RepoConfig): string {
+	return (typeof window !== 'undefined' && window.__DEPLOY_BRANCH__) || config.branch;
+}
+
 export async function getRepoFile(
 	path: string,
 	config: RepoConfig = repoConfig,
 ): Promise<{ content: string; sha: string } | null> {
 	try {
-		const resp = await proxyRequest("GET", `${repoPath(config, path)}?ref=${config.branch}`);
+		const resp = await proxyRequest("GET", `${repoPath(config, path)}?ref=${resolveBranch(config)}`);
 		if (!resp.ok) return null;
 		const data = await resp.json();
 		const content = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ""))));
@@ -515,12 +520,12 @@ export async function updateRepoFile(
 	try {
 		const encodedContent = btoa(unescape(encodeURIComponent(content)));
 		const apiPath = repoPath(config, path);
-		console.log('[updateRepoFile] PUT', apiPath, 'sha:', sha?.slice(0, 8), 'branch:', config.branch);
+		console.log('[updateRepoFile] PUT', apiPath, 'sha:', sha?.slice(0, 8), 'branch:', resolveBranch(config));
 		const resp = await proxyRequest("PUT", apiPath, {
 			message,
 			content: encodedContent,
 			sha,
-			branch: config.branch,
+			branch: resolveBranch(config),
 		});
 		if (!resp.ok) {
 			const errText = await resp.text().catch(() => "");
@@ -544,11 +549,11 @@ export async function createRepoFile(
 	try {
 		const encodedContent = btoa(unescape(encodeURIComponent(content)));
 		const apiPath = repoPath(config, path);
-		console.log('[createRepoFile] PUT', apiPath, 'branch:', config.branch, 'msg:', message);
+		console.log('[createRepoFile] PUT', apiPath, 'branch:', resolveBranch(config), 'msg:', message);
 		const resp = await proxyRequest("PUT", apiPath, {
 			message,
 			content: encodedContent,
-			branch: config.branch,
+			branch: resolveBranch(config),
 		});
 		if (!resp.ok) {
 			const errText = await resp.text().catch(() => "");
@@ -573,7 +578,7 @@ export async function deleteRepoFile(
 		const resp = await proxyRequest("DELETE", repoPath(config, path), {
 			message,
 			sha,
-			branch: config.branch,
+			branch: resolveBranch(config),
 		});
 		if (!resp.ok) invalidateToken();
 		return resp.ok;
@@ -599,13 +604,13 @@ export async function uploadImageToRepo(
 				message,
 				content: base64Content,
 				sha: existing.sha,
-				branch: config.branch,
+				branch: resolveBranch(config),
 			});
 		} else {
 			resp = await proxyRequest("PUT", repoPath(config, imagePath), {
 				message,
 				content: base64Content,
-				branch: config.branch,
+				branch: resolveBranch(config),
 			});
 		}
 		if (!resp.ok) {
@@ -613,7 +618,7 @@ export async function uploadImageToRepo(
 			const text = await resp.text().catch(() => "");
 			throw new Error(`涓婁紶澶辫触 (${resp.status}): ${text}`);
 		}
-		return `https://raw.githubusercontent.com/${config.owner}/${config.repo}/${config.branch}/${imagePath}`;
+		return `https://raw.githubusercontent.com/${config.owner}/${config.repo}/${resolveBranch(config)}/${imagePath}`;
 	} catch (e) {
 		console.error("鍥剧墖涓婁紶澶辫触:", e);
 		return null;
@@ -626,7 +631,7 @@ export async function getRepoFileMeta(
 	config: RepoConfig = repoConfig,
 ): Promise<{ sha: string; size: number } | null> {
 	try {
-		const resp = await proxyRequest("GET", `${repoPath(config, path)}?ref=${config.branch}`);
+		const resp = await proxyRequest("GET", `${repoPath(config, path)}?ref=${resolveBranch(config)}`);
 		if (!resp.ok) return null;
 		const data = await resp.json();
 		return { sha: data.sha, size: data.size || 0 };
@@ -641,7 +646,7 @@ export async function listRepoFiles(
 	config: RepoConfig = repoConfig,
 ): Promise<Array<{ name: string; path: string; sha: string; size: number }>> {
 	try {
-		const resp = await proxyRequest("GET", `${repoPath(config, dirPath)}?ref=${config.branch}`);
+		const resp = await proxyRequest("GET", `${repoPath(config, dirPath)}?ref=${resolveBranch(config)}`);
 		if (!resp.ok) return [];
 		const items = await resp.json();
 		if (!Array.isArray(items)) return [];
@@ -659,7 +664,7 @@ export async function getRepoFileBase64(
 	config: RepoConfig = repoConfig,
 ): Promise<string | null> {
 	try {
-		const resp = await proxyRequest("GET", `${repoPath(config, path)}?ref=${config.branch}`);
+		const resp = await proxyRequest("GET", `${repoPath(config, path)}?ref=${resolveBranch(config)}`);
 		if (!resp.ok) return null;
 		const data = await resp.json();
 		return data.content.replace(/\n/g, "");
@@ -679,7 +684,7 @@ export async function createRepoFileRawBase64(
 		const resp = await proxyRequest("PUT", repoPath(config, path), {
 			message,
 			content: base64Content,
-			branch: config.branch,
+			branch: resolveBranch(config),
 		});
 		if (!resp.ok) invalidateToken();
 		return resp.ok;

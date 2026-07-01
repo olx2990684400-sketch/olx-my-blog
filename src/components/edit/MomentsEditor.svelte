@@ -283,7 +283,6 @@
 		return `${contentPrefix || 'moment'}${dateStr}.md`;
 	}
 
-
 	// ========== 编辑模式切换 ==========
 	function handleModeChange(e: CustomEvent) {
 		editMode = e.detail.editing;
@@ -450,12 +449,9 @@
 	}
 
 	async function handleSubmit() {
-		const env = typeof window !== 'undefined' ? window.__DEPLOY_ENV__ : undefined;
-		console.log("[MomentsEditor] handleSubmit called, deployEnv:", env);
-		if (env && env !== 'production') {
-			showToast("预览环境不允许提交数据，请到主站 fqzlr.com 操作", "warning");
-			return;
-		}
+		const branch = typeof window !== 'undefined' ? window.__DEPLOY_BRANCH__ : undefined;
+		console.log("[MomentsEditor] handleSubmit called, branch:", branch);
+
 		if (editingIndex >= 0) {
 			finishEdit(editingIndex);
 			if (editingIndex >= 0) return;
@@ -547,7 +543,6 @@
 			saving = false;
 		}
 	}
-
 
 </script>
 

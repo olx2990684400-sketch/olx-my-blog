@@ -14,6 +14,7 @@ declare global {
 		swup: any;
 		live2dModelInitialized?: boolean;
 		__DEPLOY_ENV__?: string; // Vercel 部署环境: 'production' | 'preview' | 'development'
+		__DEPLOY_BRANCH__?: string; // Vercel 部署分支: 'master' | 'feature/...' 等
 		// biome-ignore lint/suspicious/noExplicitAny: External library (PIXI live2d)
 		_live2dApp?: any;
 		// biome-ignore lint/suspicious/noExplicitAny: External library (PIXI live2d)
