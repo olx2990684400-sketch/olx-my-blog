@@ -450,7 +450,12 @@
 	}
 
 	async function handleSubmit() {
-		console.log("[MomentsEditor] handleSubmit called");
+		const env = typeof window !== 'undefined' ? window.__DEPLOY_ENV__ : undefined;
+		console.log("[MomentsEditor] handleSubmit called, deployEnv:", env);
+		if (env && env !== 'production') {
+			showToast("预览环境不允许提交数据，请到主站 fqzlr.com 操作", "warning");
+			return;
+		}
 		if (editingIndex >= 0) {
 			finishEdit(editingIndex);
 			if (editingIndex >= 0) return;

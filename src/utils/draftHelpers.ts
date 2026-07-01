@@ -201,6 +201,12 @@ export function setupRepoDrafts(ctx: RepoDraftContext) {
 	}
 
 	async function doSubmit(content: string, sha: string | null, path: string, isEdit: boolean): Promise<boolean> {
+		// 非生产环境禁止提交到 GitHub（通过全局变量 window.__DEPLOY_ENV__ 检测）
+		const env = typeof window !== 'undefined' ? window.__DEPLOY_ENV__ : undefined;
+		if (env && env !== 'production') {
+			showToast(`预览环境不允许提交数据，请到主站操作`, "warning");
+			return false;
+		}
 		console.log('[RepoDrafts] doSubmit called:', { path, isEdit, hasSha: !!sha, contentLength: content.length });
 		const commitMsg = ctx.getCommitMsg
 			? ctx.getCommitMsg(isEdit)
