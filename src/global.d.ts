@@ -33,13 +33,15 @@ declare global {
 		_closeLive2DWidget?: () => void;
 		// biome-ignore lint/suspicious/noExplicitAny: External library
 		spinePlayerInstance?: any;
-		pagefind: {
+		pagefind?: {
 			search: (query: string) => Promise<{
 				results: Array<{
 					data: () => Promise<SearchResult>;
 				}>;
 			}>;
+			options?: (options: Record<string, unknown>) => Promise<void>;
 		};
+		__pagefindLoadFailed?: boolean;
 		__fireflyMusic?: {
 			init: () => Promise<void>;
 			getState: () => {

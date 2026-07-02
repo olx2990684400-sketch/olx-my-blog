@@ -15,6 +15,7 @@ let keyword = "";
 let results: SearchResult[] = [];
 let isSearching = false;
 let initialized = false;
+let searchUnavailable = false;
 
 // 在客户端获取 URL 参数
 const getInitialKeyword = (): string => {
@@ -39,31 +40,69 @@ const fakeResult: SearchResult[] = [
 	},
 ];
 
+const pagefindScriptUrl = formatUrl("/pagefind/pagefind.js");
+
+const ensurePagefindLoaded = async () => {
+	if (window.pagefind) {
+		searchUnavailable = false;
+		return true;
+	}
+
+	try {
+		const response = await fetch(pagefindScriptUrl, { method: "HEAD" });
+		if (!response.ok) throw new Error(`Pagefind script not found: ${response.status}`);
+
+		const pagefind = await import(/* @vite-ignore */ pagefindScriptUrl);
+		await pagefind.options?.({ excerptLength: 20 });
+		window.pagefind = pagefind;
+		window.__pagefindLoadFailed = false;
+		searchUnavailable = false;
+		document.dispatchEvent(new CustomEvent("pagefindready"));
+		return true;
+	} catch (error) {
+		console.error("Failed to load Pagefind:", error);
+		window.__pagefindLoadFailed = true;
+		searchUnavailable = true;
+		document.dispatchEvent(new CustomEvent("pagefindloaderror"));
+		return false;
+	}
+};
+
 // --- Core Search Logic ---
 const search = async () => {
 	if (!initialized || !keyword.trim()) {
-		results = [];
-		return;
+		if (!keyword.trim()) {
+			results = [];
+			return;
+		}
+		initialized = true;
 	}
 	isSearching = true;
 
 	try {
-		if (import.meta.env.PROD && window.pagefind) {
+		searchUnavailable = false;
+		await ensurePagefindLoaded();
+		if (window.pagefind) {
 			const response = await window.pagefind.search(keyword);
 			const rawResults = await Promise.all(
 				response.results.map((item) => item.data()),
 			);
 			results = rawResults;
 		} else if (import.meta.env.DEV) {
+			searchUnavailable = true;
 			// 开发模式下的模拟结果
 			results = fakeResult.filter(
 				(item) =>
 					item.excerpt.toLowerCase().includes(keyword.toLowerCase()) ||
 					item.meta.title.toLowerCase().includes(keyword.toLowerCase()),
 			);
+		} else {
+			searchUnavailable = true;
+			results = [];
 		}
 	} catch (error) {
 		console.error("Search error:", error);
+		searchUnavailable = true;
 		results = [];
 	} finally {
 		isSearching = false;
@@ -74,6 +113,7 @@ const search = async () => {
 onMount(() => {
 	const initialize = async () => {
 		initialized = true;
+		searchUnavailable = false;
 
 		// 从 URL 获取初始关键词
 		const initialKeyword = getInitialKeyword();
@@ -87,18 +127,22 @@ onMount(() => {
 		}
 	};
 
-	// 开发环境直接初始化
-	if (import.meta.env.DEV) {
+	const markUnavailable = () => {
+		initialized = true;
+		searchUnavailable = true;
+	};
+
+	if (window.pagefind) {
 		initialize();
+	} else if ((window as any).__pagefindLoadFailed) {
+		markUnavailable();
 	} else {
-		// 生产环境等待 Pagefind 加载
-		if (window.pagefind) {
-			initialize();
-		} else {
-			document.addEventListener("pagefindready", initialize, {
-				once: true,
-			});
-		}
+		document.addEventListener("pagefindready", initialize, {
+			once: true,
+		});
+		document.addEventListener("pagefindloaderror", markUnavailable, {
+			once: true,
+		});
 	}
 });
 
@@ -165,6 +209,10 @@ const handleInput = () => {
                         </a>
                     </div>
                 {/each}
+            </div>
+        {:else if searchUnavailable && keyword}
+            <div class="card-base p-10 text-center text-50 rounded-(--radius-large)">
+                搜索索引未加载，请先运行 pnpm build 生成 Pagefind 索引
             </div>
         {:else if keyword}
             <div class="card-base p-10 text-center text-50 rounded-(--radius-large)">

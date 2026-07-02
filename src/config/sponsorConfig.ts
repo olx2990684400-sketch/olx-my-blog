@@ -54,7 +54,7 @@ export const sponsorConfig: SponsorConfig = {
 	sponsors: [
 		// 示例：已实名赞助者
 		{
-			name: "番茄主理人",
+			name: "陈半醒",
 			avatar:
 				"https://q1.qlogo.cn/g?b=qq&nk=20447289&s=640",
 			amount: "¥50",

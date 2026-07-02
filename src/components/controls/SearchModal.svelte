@@ -12,6 +12,7 @@ let keyword = $state("");
 let result = $state<SearchResult[]>([]);
 let isSearching = $state(false);
 let initialized = $state(false);
+let searchUnavailable = $state(false);
 let visible = $state(false);
 let animating = $state(false);
 let debounceTimer: NodeJS.Timeout;
@@ -55,29 +56,67 @@ const fakeResult: SearchResult[] = [
 	},
 ];
 
+const pagefindScriptUrl = formatUrl("/pagefind/pagefind.js");
+
+async function ensurePagefindLoaded() {
+	if (window.pagefind) {
+		searchUnavailable = false;
+		return true;
+	}
+
+	try {
+		const response = await fetch(pagefindScriptUrl, { method: "HEAD" });
+		if (!response.ok) throw new Error(`Pagefind script not found: ${response.status}`);
+
+		const pagefind = await import(/* @vite-ignore */ pagefindScriptUrl);
+		await pagefind.options?.({ excerptLength: 20 });
+		window.pagefind = pagefind;
+		window.__pagefindLoadFailed = false;
+		searchUnavailable = false;
+		document.dispatchEvent(new CustomEvent("pagefindready"));
+		return true;
+	} catch (error) {
+		console.error("Failed to load Pagefind:", error);
+		window.__pagefindLoadFailed = true;
+		searchUnavailable = true;
+		document.dispatchEvent(new CustomEvent("pagefindloaderror"));
+		return false;
+	}
+}
+
 // --- Core Search Logic ---
 async function doSearch(kw: string) {
 	if (!kw) {
 		result = [];
 		return;
 	}
-	if (!initialized) return;
+	if (!initialized) initialized = true;
 
 	isSearching = true;
 
 	try {
 		let searchResults: SearchResult[] = [];
-		if (import.meta.env.PROD && window.pagefind) {
+		searchUnavailable = false;
+		await ensurePagefindLoaded();
+		if (window.pagefind) {
 			const response = await window.pagefind.search(kw);
 			searchResults = await Promise.all(
 				response.results.map((item) => item.data()),
 			);
 		} else if (import.meta.env.DEV) {
-			searchResults = fakeResult;
+			searchUnavailable = true;
+			searchResults = fakeResult.filter((item) =>
+				`${item.meta.title} ${item.excerpt}`
+					.toLowerCase()
+					.includes(kw.toLowerCase()),
+			);
+		} else {
+			searchUnavailable = true;
 		}
 		result = searchResults;
 	} catch (error) {
 		console.error("Search error:", error);
+		searchUnavailable = true;
 		result = [];
 	} finally {
 		isSearching = false;
@@ -264,21 +303,24 @@ function handleGlobalKeyDown(e: KeyboardEvent) {
 onMount(() => {
 	const initializePagefind = () => {
 		initialized = true;
+		searchUnavailable = false;
+	};
+	const markPagefindUnavailable = () => {
+		initialized = true;
+		searchUnavailable = true;
 	};
 
-	if (import.meta.env.DEV) {
+	if (window.pagefind) {
 		initializePagefind();
+	} else if ((window as any).__pagefindLoadFailed) {
+		markPagefindUnavailable();
 	} else {
-		if (window.pagefind) {
-			initializePagefind();
-		} else {
-			document.addEventListener("pagefindready", initializePagefind, {
-				once: true,
-			});
-			document.addEventListener("pagefindloaderror", initializePagefind, {
-				once: true,
-			});
-		}
+		document.addEventListener("pagefindready", initializePagefind, {
+			once: true,
+		});
+		document.addEventListener("pagefindloaderror", markPagefindUnavailable, {
+			once: true,
+		});
 	}
 
 	document.addEventListener("keydown", handleGlobalKeyDown);
@@ -418,6 +460,10 @@ $effect(() => {
 					</a>
 				{/if}
 			</div>
+		{:else if searchUnavailable && keyword && !isSearching}
+			<div class="search-results">
+				<div class="search-result-empty">搜索索引未加载，请先运行 pnpm build 生成 Pagefind 索引</div>
+			</div>
 		{:else if keyword && !isSearching}
 			<div class="search-results">
 				<div class="search-result-empty">未找到相关文章</div>
@@ -438,7 +484,7 @@ $effect(() => {
 	.search-modal-backdrop {
 		position: fixed;
 		inset: 0;
-		z-index: 100;
+		z-index: 2147482600;
 		display: flex;
 		align-items: flex-start;
 		justify-content: center;

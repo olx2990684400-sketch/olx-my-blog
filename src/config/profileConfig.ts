@@ -12,13 +12,13 @@ export const profileConfig: ProfileConfig = {
 	avatarOffWork: "assets/images/xiaban.gif",
 
 	// 名字
-	name: "Fqzlr",
+	name: "OLX",
 
 	// 首页展示名字（留空则使用 name）
-	displayName: "Fqzlrの博客",
+	displayName: "OLXの博客",
 
 	// 名字右侧徽章文字（如 QQ 号）
-	nameBadge: "B站：番茄煮理人",
+	nameBadge: "A-XING",
 
 	// 职业/身份标签
 	occupation: "[啥都不会/ 无技术博主]",
@@ -65,7 +65,7 @@ export const profileConfig: ProfileConfig = {
 		},
 		{
 			name: "my home",
-			url: "https://home.fqzlr.com",
+			url: "https://olxc.art/myblog/",
 			icon: "fa7-solid:house-chimney",
 			showName: false,
 		},

@@ -75,7 +75,7 @@ export const LinkPresets: { [key in LinkPreset]: NavBarLink } = {
 	},
 	[LinkPreset.Fhome]: {
 		name: i18n(I18nKey.Fhome),
-		url: "https://home.fqzlr.com/",
+		url: "https://olxc.art/myblog/",
 		icon: "material-symbols:link",
 		external: true,
 	},

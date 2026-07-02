@@ -7,7 +7,7 @@ image: /src/assets/images/cover.avif
 tags: [图床]
 category: 博客
 draft: false
-author: fqzlr
+author: OLX
 ---
 # Cloudflare Workers 部署 Cloudflare‑ImgBed 图床完整教程
 

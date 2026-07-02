@@ -1,10 +1,13 @@
 .page-loader {
-	--page-loader-size: clamp(18rem, 60vw, 36rem);
 	--page-loader-bg: #fff;
+	--loader-ink: #111827;
+	--loader-line: rgba(17, 24, 39, 0.1);
+	--loader-accent: #f472b6;
+	--loader-accent-2: #7dd3fc;
 
 	position: fixed;
 	inset: 0;
-	z-index: 10000;
+	z-index: 2147483647;
 	display: grid;
 	place-items: center;
 	background: var(--page-loader-bg);
@@ -12,29 +15,111 @@
 	visibility: visible;
 	pointer-events: auto;
 	transition:
-		opacity 220ms ease,
-		visibility 220ms ease;
+		opacity 240ms ease,
+		visibility 240ms ease;
+	overflow: hidden;
 }
 
-.page-loader::after {
-	content: "";
-	position: absolute;
-	inset: 0;
-	z-index: 0;
-	background: rgba(0, 0, 0, 0.42);
-	opacity: 0;
-	transition: opacity 220ms ease;
-	pointer-events: none;
-}
-
-:root.dark .page-loader::after {
-	opacity: 1;
+:root.is-page-loading #top-row,
+:root.is-page-loading #navbar-wrapper,
+:root.is-page-loading #navbar {
+	opacity: 0 !important;
+	visibility: hidden !important;
+	pointer-events: none !important;
 }
 
 .page-loader--hidden {
 	opacity: 0;
 	visibility: hidden;
 	pointer-events: none;
+}
+
+.page-loader__mark {
+	display: grid;
+	justify-items: center;
+	gap: 0.7rem;
+	transform: translateY(-1.2rem);
+}
+
+.page-loader__avatar {
+	position: relative;
+	width: clamp(5.8rem, 12vw, 8.4rem);
+	aspect-ratio: 1;
+	display: grid;
+	place-items: center;
+	border-radius: 999px;
+	background:
+		radial-gradient(circle at 40% 24%, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.78) 52%, rgba(244, 114, 182, 0.12)),
+		linear-gradient(135deg, rgba(125, 211, 252, 0.18), rgba(244, 114, 182, 0.2));
+	box-shadow:
+		0 1rem 2.5rem rgba(15, 23, 42, 0.1),
+		inset 0 0 0 1px rgba(17, 24, 39, 0.08);
+	overflow: hidden;
+	animation: pageLoaderBob 1.55s ease-in-out infinite;
+}
+
+.page-loader__avatar::after {
+	content: "";
+	position: absolute;
+	inset: auto 18% 0.45rem;
+	height: 0.5rem;
+	border-radius: 999px;
+	background: rgba(15, 23, 42, 0.08);
+	filter: blur(3px);
+	animation: pageLoaderShadow 1.55s ease-in-out infinite;
+}
+
+.page-loader__image {
+	position: relative;
+	z-index: 1;
+	display: block;
+	width: 118%;
+	height: 118%;
+	object-fit: contain;
+	object-position: center 43%;
+	transform: translateY(0.45rem);
+}
+
+.page-loader__brand {
+	display: flex;
+	align-items: center;
+	gap: 0.18rem;
+	font-family: "JetBrains Mono Variable", "SFMono-Regular", Menlo, Consolas, monospace;
+	font-size: clamp(1.35rem, 2.8vw, 2rem);
+	font-weight: 900;
+	letter-spacing: 0.16em;
+	color: var(--loader-ink);
+}
+
+.page-loader__brand span {
+	display: inline-block;
+	animation: pageLoaderLetter 1.15s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+.page-loader__brand span:nth-child(2) {
+	animation-delay: 0.12s;
+}
+
+.page-loader__brand span:nth-child(3) {
+	animation-delay: 0.24s;
+}
+
+.page-loader__progress {
+	position: relative;
+	width: clamp(5.8rem, 12vw, 8.4rem);
+	height: 0.22rem;
+	border-radius: 999px;
+	background: var(--loader-line);
+	overflow: hidden;
+}
+
+.page-loader__progress span {
+	position: absolute;
+	inset: 0;
+	width: 42%;
+	border-radius: inherit;
+	background: linear-gradient(90deg, var(--loader-accent-2), var(--loader-accent));
+	animation: pageLoaderProgress 1.05s ease-in-out infinite;
 }
 
 .page-loader__sr-only {
@@ -49,20 +134,45 @@
 	border: 0;
 }
 
-.page-loader__animation {
-	position: relative;
-	z-index: 1;
-	width: var(--page-loader-size);
-	height: auto;
-	aspect-ratio: 480 / 270;
-	filter: none;
+@keyframes pageLoaderBob {
+	0%,
+	100% {
+		transform: translateY(0);
+	}
+	50% {
+		transform: translateY(-0.45rem);
+	}
 }
 
-.page-loader__image {
-	display: block;
-	width: 100%;
-	height: 100%;
-	object-fit: contain;
+@keyframes pageLoaderShadow {
+	0%,
+	100% {
+		opacity: 0.95;
+		transform: scaleX(1);
+	}
+	50% {
+		opacity: 0.48;
+		transform: scaleX(0.78);
+	}
+}
+
+@keyframes pageLoaderLetter {
+	0%,
+	100% {
+		transform: translateY(0);
+	}
+	45% {
+		transform: translateY(-0.2rem);
+	}
+}
+
+@keyframes pageLoaderProgress {
+	0% {
+		transform: translateX(-112%);
+	}
+	100% {
+		transform: translateX(238%);
+	}
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -73,7 +183,6 @@
 	}
 }
 
-/* Mobile: hide page loader completely */
 @media (max-width: 768px) {
 	.page-loader {
 		display: none !important;

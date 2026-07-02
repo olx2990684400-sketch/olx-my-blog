@@ -10,7 +10,7 @@ tags:
   - Firefly
 category: 教程
 draft: false
-author: fqzlr
+author: OLX
 ---
 
 # Firefly 友链自助申请自动化 

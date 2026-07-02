@@ -101,9 +101,7 @@ onDestroy(() => {
 		>
 			{#each lyrics as line, i}
 				<div
-					class="music-visualizer__lyric-line"
-					class:music-visualizer__lyric-line--active={i === currentIndex}
-					class:music-visualizer__lyric-line--past={i < currentIndex}
+					class={`music-visualizer__lyric-line${i === currentIndex ? " music-visualizer__lyric-line--active" : ""}${i < currentIndex ? " music-visualizer__lyric-line--past" : ""}`}
 					data-lyric-index={i}
 				>
 					<span class="music-visualizer__lyric-marker"></span>

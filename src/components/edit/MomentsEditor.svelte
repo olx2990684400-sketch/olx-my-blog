@@ -28,7 +28,7 @@
 
 	const MOMENTS_FILE = "public/moments.json"; // 仓库中的说说 JSON 文件
 	const DEFAULT_AVATAR = "https://q1.qlogo.cn/g?b=qq&nk=20447289&s=640";
-	const DEFAULT_AUTHOR = "fqzlr";
+	const DEFAULT_AUTHOR = "OLX";
 
 	let editMode = $state(false);
 	let saving = $state(false);

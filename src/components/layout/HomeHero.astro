@@ -2,6 +2,7 @@
 import { getImage } from "astro:assets";
 import type { ImageMetadata } from "astro";
 import { profileConfig, siteConfig } from "@/config";
+import Icon from "@components/common/Icon.astro";
 
 const workHours = siteConfig.workHours ?? {
 	start: 9,
@@ -74,7 +75,13 @@ const heroBioText = Array.isArray(profileConfig.bio)
 	data-work-hours={JSON.stringify(workHours)}
 >
 	<!-- 背景层 -->
-	<img class="home-hero__video" src="/assets/images/home/home.webp" alt="" />
+	<img class="home-hero__video" src="/assets/images/olx-anime/hero-bright.webp" alt="" />
+	<div class="home-hero__ambient" aria-hidden="true">
+		<span class="home-hero__ambient-line home-hero__ambient-line--one"></span>
+		<span class="home-hero__ambient-line home-hero__ambient-line--two"></span>
+		<span class="home-hero__ambient-dot home-hero__ambient-dot--one"></span>
+		<span class="home-hero__ambient-dot home-hero__ambient-dot--two"></span>
+	</div>
 
 	<!-- 全屏内容容器 -->
 	<div class="home-hero__canvas-container" id="main-canvas">
@@ -122,6 +129,38 @@ const heroBioText = Array.isArray(profileConfig.bio)
 						<p class="home-hero__motto-text">{heroBioText}</p>
 					</div>
 				)}
+
+				<div class="home-hero__signal-panel" data-hero-magnetic>
+					<div class="home-hero__signal-topline">
+						<span>FIELD NOTES / 2026</span>
+						<span>AI · LIFE · EMOTION</span>
+					</div>
+					<p class="home-hero__signal-copy">把技术的锋利、AI 的新鲜感和生活里的小情绪，写成一张持续更新的个人地图。</p>
+					<div class="home-hero__contact-grid" aria-label="联系方式">
+						<button class="home-hero__contact-chip home-hero__contact-chip--wechat" type="button" aria-label="微信号 A-XING" title="微信号 A-XING">
+							<Icon name="fa7-brands:weixin" is:inline />
+							<span class="home-hero__contact-popover" aria-hidden="true">
+								<img src="/assets/images/olx-anime/contact-wechat.jpg" alt="" loading="lazy" />
+							</span>
+						</button>
+						<button class="home-hero__contact-chip home-hero__contact-chip--music" type="button" aria-label="网易云 OLX Field Notes" title="网易云 OLX Field Notes">
+							<Icon name="material-symbols:music-note-rounded" is:inline />
+							<span class="home-hero__contact-popover" aria-hidden="true">
+								<img src="/assets/images/olx-anime/contact-netease.jpg" alt="" loading="lazy" />
+							</span>
+						</button>
+						<button class="home-hero__contact-chip home-hero__contact-chip--official" type="button" aria-label="公众号 A-XING" title="公众号 A-XING">
+							<Icon name="material-symbols:mark-chat-unread-rounded" is:inline />
+							<span class="home-hero__contact-popover" aria-hidden="true">
+								<img src="/assets/images/olx-anime/contact-official.jpg" alt="" loading="lazy" />
+							</span>
+						</button>
+					</div>
+					<div class="home-hero__signal-actions">
+						<a href="/list/" class="home-hero__signal-link" data-hero-magnetic>开始阅读</a>
+						<a href="/archive/" class="home-hero__signal-link home-hero__signal-link--ghost" data-hero-magnetic>查看归档</a>
+					</div>
+				</div>
 			</div>
 		</section>
 
@@ -133,8 +172,8 @@ const heroBioText = Array.isArray(profileConfig.bio)
 				<div class="home-hero__character-reveal">
 					<div class="home-hero__character-motion">
 						<img
-							src="/assets/images/home/home2.webp"
-							alt="character"
+							src="/assets/images/olx-anime/cola-girl-cutout.png"
+							alt="抱着可乐的动漫女生角色"
 							class="home-hero__character-img"
 							loading="eager"
 						/>
@@ -143,10 +182,10 @@ const heroBioText = Array.isArray(profileConfig.bio)
 			</div>
 			<div class="home-hero__speech" aria-label="Character message">
 				<p class="home-hero__speech-text">
-					<span class="home-hero__speech-type">番茄主理人？</span>
+					<span class="home-hero__speech-type">今天喝可乐吗？</span>
 				</p>
 				<p class="home-hero__speech-en">
-					<span class="home-hero__speech-type">If you feel tired, you might as well have a glass of juice?</span>
+					<span class="home-hero__speech-type">If you feel tired, have a cold cola and keep going.</span>
 				</p>
 				<img
 					src="/assets/images/home/home2-1.webp"
@@ -170,6 +209,9 @@ const heroBioText = Array.isArray(profileConfig.bio)
 			<div class="home-hero__panel-footer">
 				<div class="home-hero__footer-line"></div>
 				<p class="home-hero__micro-text">システム起動完了</p>
+			</div>
+			<div class="home-hero__scroll-meter" aria-hidden="true">
+				<span class="home-hero__scroll-meter-fill"></span>
 			</div>
 		</aside>
 	</div>
@@ -226,7 +268,10 @@ const heroBioText = Array.isArray(profileConfig.bio)
 		const characterMotion = hero.querySelector(".home-hero__character-motion");
 		const speech = hero.querySelector(".home-hero__speech");
 		const speechLines = hero.querySelectorAll(".home-hero__speech-type");
+		const signalPanel = hero.querySelector(".home-hero__signal-panel");
+		const signalItems = hero.querySelectorAll(".home-hero__signal-topline span, .home-hero__signal-copy, .home-hero__contact-chip, .home-hero__signal-link");
 		const rightPanel = hero.querySelector(".home-hero__right-panel");
+		const scrollMeter = hero.querySelector(".home-hero__scroll-meter");
 		const brackets = hero.querySelectorAll(".home-hero__bracket");
 		const bottomLine = hero.querySelector(".home-hero__bottom-line");
 		const leftLine = hero.querySelector(".home-hero__left-line");
@@ -405,7 +450,42 @@ const heroBioText = Array.isArray(profileConfig.bio)
 				clipPath: "inset(0 0% 0 0)",
 				duration: 1.05,
 				ease: "steps(18)",
-			}, 3.08);
+			}, 3.08)
+			.fromTo(signalPanel, {
+				autoAlpha: 0,
+				y: 32,
+				rotateX: 10,
+				filter: "blur(12px)",
+				transformOrigin: "50% 100%",
+			}, {
+				autoAlpha: 1,
+				y: 0,
+				rotateX: 0,
+				filter: "blur(0px)",
+				duration: 0.95,
+				ease: "expo.out",
+				clearProps: "filter",
+			}, 2.02)
+			.fromTo(signalItems, {
+				autoAlpha: 0,
+				y: 18,
+			}, {
+				autoAlpha: 1,
+				y: 0,
+				duration: 0.62,
+				stagger: 0.055,
+				ease: "power3.out",
+			}, 2.26)
+			.fromTo(scrollMeter, {
+				autoAlpha: 0,
+				scaleY: 0,
+				transformOrigin: "50% 100%",
+			}, {
+				autoAlpha: 1,
+				scaleY: 1,
+				duration: 0.72,
+				ease: "expo.out",
+			}, 2.1);
 
 		hero.classList.remove("home-hero--motion-pending");
 		return heroTitleReady;
@@ -569,6 +649,65 @@ const heroBioText = Array.isArray(profileConfig.bio)
 	}
 
 	// ============================================
+	// 精致交互：磁吸按钮 + 首屏滚动进度
+	// ============================================
+	let magneticCleanup: (() => void) | null = null;
+
+	function initHeroInteractions() {
+		if (prefersReducedMotion() || isMobile()) return;
+		const hero = document.getElementById("home-hero");
+		if (!hero) return;
+		const magneticItems = Array.from(hero.querySelectorAll<HTMLElement>(".home-hero__signal-link"));
+		const listeners: Array<() => void> = [];
+
+		magneticItems.forEach((item) => {
+			const xTo = gsap.quickTo(item, "x", { duration: 0.34, ease: "power3.out" });
+			const yTo = gsap.quickTo(item, "y", { duration: 0.34, ease: "power3.out" });
+			const onMove = (event: MouseEvent) => {
+				const rect = item.getBoundingClientRect();
+				const x = ((event.clientX - rect.left) / rect.width - 0.5) * 10;
+				const y = ((event.clientY - rect.top) / rect.height - 0.5) * 8;
+				xTo(x);
+				yTo(y);
+			};
+			const onLeave = () => {
+				xTo(0);
+				yTo(0);
+			};
+			item.addEventListener("mousemove", onMove);
+			item.addEventListener("mouseleave", onLeave);
+			item.addEventListener("blur", onLeave);
+			listeners.push(() => {
+				item.removeEventListener("mousemove", onMove);
+				item.removeEventListener("mouseleave", onLeave);
+				item.removeEventListener("blur", onLeave);
+			});
+		});
+
+		const meterFill = hero.querySelector(".home-hero__scroll-meter-fill");
+		if (meterFill) {
+			ScrollTrigger.create({
+				id: "home-motion-hero-meter",
+				trigger: hero,
+				start: "top top",
+				end: "bottom top",
+				onUpdate: (self) => {
+					gsap.set(meterFill, { scaleY: Math.max(0.08, self.progress), transformOrigin: "50% 100%" });
+				},
+			});
+		}
+
+		magneticCleanup = () => {
+			listeners.forEach((remove) => remove());
+			magneticCleanup = null;
+		};
+	}
+
+	function destroyHeroInteractions() {
+		if (magneticCleanup) magneticCleanup();
+	}
+
+	// ============================================
 	// 上下班头像与状态牌
 	// ============================================
 	function initWorkStatus() {
@@ -707,6 +846,7 @@ const heroBioText = Array.isArray(profileConfig.bio)
 		const heroOpeningReady = initHeroOpening();
 		initParallax();
 		initWorkStatus();
+		initHeroInteractions();
 		void initHeroHatch(heroOpeningReady, token);
 
 		// 推迟 ScrollTrigger 初始化，避免阻塞 Hero 入场动画的首次渲染
@@ -720,6 +860,7 @@ const heroBioText = Array.isArray(profileConfig.bio)
 		destroyParallax();
 		destroyWorkStatus();
 		destroyHeroHatch();
+		destroyHeroInteractions();
 	}
 
 	async function scheduleHomeInit() {

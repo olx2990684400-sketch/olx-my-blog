@@ -142,7 +142,7 @@
 		}
 		lines.push(`draft: ${isDraft}`);
 		lines.push(`pinned: ${isPinned}`);
-		lines.push(`author: fqzlr`);
+		lines.push(`author: OLX`);
 		lines.push("---");
 		return lines.join("\n");
 	}
@@ -509,7 +509,7 @@
 		if (payload.category) fmLines.push(`category: ${esc(payload.category)}`);
 		fmLines.push(`draft: ${!!payload.isDraft}`);
 		fmLines.push(`pinned: ${!!payload.isPinned}`);
-		fmLines.push(`author: fqzlr`);
+		fmLines.push(`author: OLX`);
 		fmLines.push("---");
 		const body = String(payload.content || "").trimStart();
 		const fullContent = `${fmLines.join("\n")}\n\n${body}`;

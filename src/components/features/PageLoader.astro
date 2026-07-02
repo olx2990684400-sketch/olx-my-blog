@@ -5,19 +5,23 @@
 	aria-live="polite"
 	aria-label="Page loading"
 >
-	<div
-		aria-label="Running animation"
-		role="img"
-		class="page-loader__animation"
-	>
-		<img
-			src="/assets/images/loading/feibi-loading.webp"
-			alt=""
-			class="page-loader__image"
-			width="960"
-			height="540"
-			decoding="async"
-		/>
+	<div class="page-loader__mark" aria-hidden="true">
+		<div class="page-loader__avatar">
+			<img
+				src="/assets/images/olx-anime/cola-girl-cutout.png"
+				alt=""
+				class="page-loader__image"
+				width="512"
+				height="742"
+				decoding="async"
+			/>
+		</div>
+		<div class="page-loader__brand" aria-label="OLX loading">
+			<span>O</span>
+			<span>L</span>
+			<span>X</span>
+		</div>
+		<div class="page-loader__progress"><span></span></div>
 	</div>
 	<span class="page-loader__sr-only">Loading</span>
 </div>

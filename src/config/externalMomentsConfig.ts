@@ -13,7 +13,7 @@ export const externalMomentsConfig = {
 	fileName: "moments.json",
 
 	// 默认作者信息
-	defaultAuthor: "fqzlr",
+	defaultAuthor: "OLX",
 	defaultAvatar: "https://q1.qlogo.cn/g?b=qq&nk=20447289&s=640",
 
 	// ========================================================================

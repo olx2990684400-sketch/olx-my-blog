@@ -4,6 +4,7 @@
   "version": "V2.2.2",
   "scripts": {
     "dev": "astro dev",
+    "boot": "bash scripts/start-blog.sh",
     "start": "astro dev",
     "check": "astro check",
     "build": "node scripts/generate-icons.js && astro build && pagefind --site dist",

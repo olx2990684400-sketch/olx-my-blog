@@ -39,9 +39,12 @@ export const momentsEditConfig: EditGistConfig = {
 
 // GitHub 仓库配置（用于直接修改仓库文件）
 const envAppId = (import.meta as any).env?.PUBLIC_GITHUB_APP_ID || "";
+const envOwner = (import.meta as any).env?.PUBLIC_GITHUB_OWNER || "";
+const envRepo = (import.meta as any).env?.PUBLIC_GITHUB_REPO || "";
+const envBranch = (import.meta as any).env?.PUBLIC_GITHUB_BRANCH || "";
 export const repoConfig = {
-	owner: "fqzlr",
-	repo: "my-blog",
-	branch: "master",
+	owner: envOwner || "olx2990684400-sketch",
+	repo: envRepo || "olx-my-blog",
+	branch: envBranch || "master",
 	appId: envAppId || "",
 };

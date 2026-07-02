@@ -77,7 +77,7 @@ onDestroy(() => {
 });
 </script>
 
-<div class="music-visualizer" class:music-visualizer--dark={isDark}>
+<div class={`music-visualizer${isDark ? " music-visualizer--dark" : ""}`}>
 	{#if sceneReady}
 		<VisualizerControls />
 		<LyricsOverlay />

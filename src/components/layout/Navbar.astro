@@ -97,6 +97,16 @@ if (isLocalSrcLogo) {
             </div>
 
             <div class="navbar-right flex items-center gap-0.5 lg:gap-1">
+                <div class="navbar-clock" data-navbar-clock aria-label="当前时间">
+                    <span class="navbar-clock__pulse" aria-hidden="true"></span>
+                    <span class="navbar-clock__dial" aria-hidden="true">
+                        <span class="navbar-clock__hand navbar-clock__hand--hour"></span>
+                        <span class="navbar-clock__hand navbar-clock__hand--minute"></span>
+                        <span class="navbar-clock__hand navbar-clock__hand--second"></span>
+                        <span class="navbar-clock__pin"></span>
+                    </span>
+                    <time class="navbar-clock__time" data-navbar-clock-time datetime="">00:00:00</time>
+                </div>
                 <button aria-label="Search" name="Search" class="btn-plain h-9 w-9 lg:h-11 lg:w-11" id="nav-search-btn">
                     <Icon name="material-symbols:search-rounded" is:inline class="text-[1.25rem] lg:text-[1.65rem]" style="font-variation-settings: 'wght' 700"></Icon>
                 </button>
@@ -104,7 +114,8 @@ if (isLocalSrcLogo) {
                     <Icon name="material-symbols:settings-rounded" is:inline class="text-[1.1rem] lg:text-[1.25rem]" />
                 </a>
                 <button id="nav-theme-btn" class="btn-plain h-9 w-9 lg:h-11 lg:w-11" aria-label="Toggle theme" name="Theme">
-                    <Icon name="material-symbols:dark-mode-rounded" is:inline class="text-[1.1rem] lg:text-[1.25rem]" />
+                    <Icon name="material-symbols:light-mode-rounded" is:inline class="theme-icon theme-icon--sun text-[1.1rem] lg:text-[1.25rem]" />
+                    <Icon name="material-symbols:dark-mode-rounded" is:inline class="theme-icon theme-icon--moon text-[1.1rem] lg:text-[1.25rem]" />
                 </button>
                 <button aria-label="Menu" name="Nav Menu" class="btn-plain h-9 w-9 lg:h-11 lg:w-11 lg:hidden!" id="nav-menu-switch">
                     <Icon name="material-symbols:menu-rounded" is:inline class="text-[1.1rem] lg:text-[1.25rem]"></Icon>
@@ -119,6 +130,7 @@ if (isLocalSrcLogo) {
 <script>
 let _hoverSliderAbortController: AbortController | null = null;
 let _hoverSliderMouseEnterHandlers: Array<[Element, (e: Event) => void]> = [];
+let _navbarClockTimer: number | null = null;
 
 function cleanupHoverSlider() {
     if (_hoverSliderAbortController) {
@@ -210,6 +222,39 @@ function initHoverSlider() {
 
 initHoverSlider();
 
+function initNavbarClock() {
+    if (_navbarClockTimer) {
+        window.clearInterval(_navbarClockTimer);
+        _navbarClockTimer = null;
+    }
+
+    const clock = document.querySelector<HTMLElement>("[data-navbar-clock]");
+    const timeEl = document.querySelector<HTMLTimeElement>("[data-navbar-clock-time]");
+    if (!clock || !timeEl) return;
+
+    const pad = (value: number) => String(value).padStart(2, "0");
+
+    function updateClock() {
+        const now = new Date();
+        const hours = now.getHours();
+        const minutes = now.getMinutes();
+        const seconds = now.getSeconds();
+        const milliseconds = now.getMilliseconds();
+
+        timeEl.textContent = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+        timeEl.dateTime = now.toISOString();
+        clock.style.setProperty("--nav-clock-hour", `${((hours % 12) + minutes / 60) * 30}deg`);
+        clock.style.setProperty("--nav-clock-minute", `${(minutes + seconds / 60) * 6}deg`);
+        clock.style.setProperty("--nav-clock-second", `${(seconds + milliseconds / 1000) * 6}deg`);
+        clock.classList.toggle("is-even-second", seconds % 2 === 0);
+    }
+
+    updateClock();
+    _navbarClockTimer = window.setInterval(updateClock, 1000);
+}
+
+initNavbarClock();
+
 (function() {
     const navbar = document.getElementById('navbar');
     const navbarWrapper = document.getElementById('navbar-wrapper');
@@ -246,6 +291,7 @@ initHoverSlider();
 
 document.addEventListener("astro:page-load", () => {
     initHoverSlider();
+    initNavbarClock();
 });
 
 // Navbar search button → open search modal
@@ -275,31 +321,31 @@ document.getElementById("navbar")?.addEventListener("click", (e) => {
 });
 </script>
 
-{
-    import.meta.env.PROD && (
-        <script is:inline data-swup-ignore-script define:vars={{ scriptUrl: url('/pagefind/pagefind.js') }}>
-            async function loadPagefind() {
-                try {
-                    const response = await fetch(scriptUrl, { method: 'HEAD' });
-                    if (!response.ok) throw new Error(`Pagefind script not found: ${response.status}`);
-                    const pagefind = await import(scriptUrl);
-                    await pagefind.options({ excerptLength: 20 });
-                    window.pagefind = pagefind;
-                    document.dispatchEvent(new CustomEvent('pagefindready'));
-                } catch (error) {
-                    console.error('Failed to load Pagefind:', error);
-                    window.pagefind = {
-                        search: () => Promise.resolve({ results: [] }),
-                        options: () => Promise.resolve(),
-                    };
-                    document.dispatchEvent(new CustomEvent('pagefindloaderror'));
-                }
-            }
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', loadPagefind);
-            } else {
-                loadPagefind();
-            }
-        </script>
-    )
-}
+<script is:inline data-swup-ignore-script define:vars={{ scriptUrl: url('/pagefind/pagefind.js') }}>
+    async function loadPagefind() {
+        if (window.pagefind) {
+            window.__pagefindLoadFailed = false;
+            document.dispatchEvent(new CustomEvent('pagefindready'));
+            return;
+        }
+
+        try {
+            const response = await fetch(scriptUrl, { method: 'HEAD' });
+            if (!response.ok) throw new Error(`Pagefind script not found: ${response.status}`);
+            const pagefind = await import(scriptUrl);
+            await pagefind.options({ excerptLength: 20 });
+            window.pagefind = pagefind;
+            window.__pagefindLoadFailed = false;
+            document.dispatchEvent(new CustomEvent('pagefindready'));
+        } catch (error) {
+            console.error('Failed to load Pagefind:', error);
+            window.__pagefindLoadFailed = true;
+            document.dispatchEvent(new CustomEvent('pagefindloaderror'));
+        }
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', loadPagefind);
+    } else {
+        loadPagefind();
+    }
+</script>

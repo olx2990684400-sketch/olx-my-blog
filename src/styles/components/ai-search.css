@@ -78,10 +78,10 @@
 .ai-overlay {
 	position: fixed;
 	inset: 0;
-	z-index: 100;
-	background: oklch(0 0 0 / 0.3);
-	backdrop-filter: blur(8px);
-	-webkit-backdrop-filter: blur(8px);
+	z-index: 2147482600;
+	background: oklch(0 0 0 / 0.46);
+	backdrop-filter: blur(14px) saturate(0.92);
+	-webkit-backdrop-filter: blur(14px) saturate(0.92);
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -90,19 +90,21 @@
 }
 
 :root.dark .ai-overlay {
-	background: oklch(0 0 0 / 0.5);
+	background: oklch(0 0 0 / 0.68);
 }
 
 /* --- 面板（磨砂玻璃） --- */
 .ai-panel {
+	position: relative;
+	isolation: isolate;
 	width: 100%;
 	max-width: 56rem;
 	height: 85vh;
 	max-height: 800px;
-	background: oklch(1 0 0 / 0.75);
-	backdrop-filter: blur(24px) saturate(1.6);
-	-webkit-backdrop-filter: blur(24px) saturate(1.6);
-	border: 1px solid oklch(1 0 0 / 0.5);
+	background: #f8f9fc;
+	backdrop-filter: blur(28px) saturate(1.25);
+	-webkit-backdrop-filter: blur(28px) saturate(1.25);
+	border: 1px solid oklch(1 0 0 / 0.72);
 	border-radius: 1rem;
 	box-shadow:
 		0 8px 32px oklch(0 0 0 / 0.1),
@@ -114,8 +116,8 @@
 }
 
 :root.dark .ai-panel {
-	background: oklch(0.15 0 0 / 0.7);
-	border-color: oklch(1 0 0 / 0.08);
+	background: #171922;
+	border-color: oklch(1 0 0 / 0.12);
 	box-shadow:
 		0 8px 32px oklch(0 0 0 / 0.3),
 		0 2px 8px oklch(0 0 0 / 0.2);

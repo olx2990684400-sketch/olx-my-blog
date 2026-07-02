@@ -48,8 +48,8 @@ export const homePortfolioShutterConfig = {
 		foreground: "/assets/images/home-truncated/b-1.webp",
 		stripLeft: "/assets/images/home-truncated/b-2.webp",
 		stripRight: "/assets/images/home-truncated/b-3.webp",
-		copyLeft: "番茄",
-		copyRight: "主理人",
+		copyLeft: "陈半醒",
+		copyRight: "笔记",
 	},
 	panels: [
 		{

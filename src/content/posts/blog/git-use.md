@@ -9,7 +9,7 @@ tags:
 category: Git
 draft: false
 pinned: false
-author: fqzlr
+author: OLX
 ---
 
 # Git 详细使用教程（命令行版，附命令作用解释）

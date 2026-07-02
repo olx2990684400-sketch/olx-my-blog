@@ -1,0 +1,245 @@
+.books-page-wrapper {
+	border-radius: var(--radius-large);
+}
+
+.books-header {
+	animation: booksFadeSlideIn 0.4s ease both;
+}
+
+.books-icon {
+	transition: transform 0.2s ease;
+}
+
+.books-icon:hover {
+	transform: scale(1.05);
+}
+
+.bookshelf {
+	padding: 24px 16px 8px;
+	border: 2px solid #000;
+	border-radius: 16px;
+}
+
+:root.dark .bookshelf {
+	border-color: #3f3f46;
+}
+
+.shelf-grid {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 20px 16px;
+	padding: 0 4px;
+}
+
+.book-card {
+	display: block;
+	text-decoration: none;
+	color: inherit;
+	cursor: pointer;
+	transition: transform 0.2s ease;
+}
+
+.book-card:hover {
+	transform: translateY(-4px);
+}
+
+.book-cover-wrap {
+	position: relative;
+	aspect-ratio: 3 / 4;
+	border-radius: 6px;
+	overflow: hidden;
+	box-shadow:
+		0 2px 8px rgba(0, 0, 0, 0.1),
+		0 1px 2px rgba(0, 0, 0, 0.06);
+	transition: box-shadow 0.2s ease;
+	background: var(--btn-regular-bg);
+}
+
+.book-card:hover .book-cover-wrap {
+	box-shadow:
+		0 8px 25px rgba(0, 0, 0, 0.15),
+		0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.book-cover-img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+}
+
+.book-status-tag {
+	position: absolute;
+	top: 8px;
+	left: 8px;
+	padding: 2px 8px;
+	border-radius: 4px;
+	font-size: 10px;
+	font-weight: 600;
+	color: #fff;
+	z-index: 2;
+	letter-spacing: 0.02em;
+	line-height: 1.6;
+}
+
+.book-score-tag {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding: 2px 7px 2px 5px;
+	border-radius: 4px;
+	background: rgba(0, 0, 0, 0.55);
+	font-size: 11px;
+	font-weight: 700;
+	color: #fbbf24;
+	z-index: 2;
+	line-height: 1;
+}
+
+.book-score-star {
+	width: 10px;
+	height: 10px;
+	flex-shrink: 0;
+}
+
+.book-hover-overlay {
+	position: absolute;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.5);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	opacity: 0;
+	transition: opacity 0.2s ease;
+	z-index: 3;
+}
+
+.book-card:hover .book-hover-overlay {
+	opacity: 1;
+}
+
+.book-hover-text {
+	color: #fff;
+	font-size: 14px;
+	font-weight: 600;
+	padding: 6px 16px;
+	border: 1.5px solid rgba(255, 255, 255, 0.7);
+	border-radius: 20px;
+	letter-spacing: 0.04em;
+}
+
+.book-title {
+	margin: 8px 2px 0;
+	font-size: 12px;
+	font-weight: 500;
+	line-height: 1.4;
+	color: var(--deep-text);
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	text-align: center;
+}
+
+.book-card:hover .book-title,
+:root.dark .book-card:hover .book-title {
+	color: var(--primary);
+}
+
+:root.dark .book-cover-wrap {
+	border: 1px solid #3f3f46;
+	box-shadow: 0 2px 8px rgba(255, 255, 255, 0.03);
+}
+
+:root.dark .book-card:hover .book-cover-wrap {
+	border-color: #fff;
+	box-shadow: 0 8px 25px rgba(255, 255, 255, 0.1);
+}
+
+@keyframes booksFadeSlideIn {
+	from {
+		opacity: 0;
+		transform: translateY(8px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@media (min-width: 640px) {
+	.shelf-grid {
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+	}
+}
+
+@media (min-width: 768px) {
+	.shelf-grid {
+		grid-template-columns: repeat(5, minmax(0, 1fr));
+	}
+}
+
+@media (min-width: 1024px) {
+	.shelf-grid {
+		grid-template-columns: repeat(6, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 768px) {
+	.books-header:has(> .page-header-toolbar-slot) {
+		flex-direction: column;
+	}
+
+	.page-header-toolbar-slot {
+		width: 100%;
+	}
+}
+
+@media (max-width: 640px) {
+	.card-base {
+		padding-left: 1rem;
+		padding-right: 1rem;
+		padding-top: 1.5rem;
+		padding-bottom: 1.5rem;
+	}
+
+	.bookshelf {
+		padding: 8px 2px 2px;
+	}
+
+	.shelf-grid {
+		gap: 18px 8px;
+	}
+}
+
+@media (max-width: 480px) {
+	.book-status-tag {
+		top: 3px;
+		left: 3px;
+		padding: 1px 5px;
+		font-size: 8px;
+		border-radius: 3px;
+	}
+
+	.book-score-tag {
+		top: 3px;
+		right: 3px;
+		padding: 1px 4px 1px 3px;
+		font-size: 9px;
+		border-radius: 3px;
+	}
+
+	.book-score-star {
+		width: 8px;
+		height: 8px;
+	}
+
+	.book-title {
+		font-size: 11px;
+		margin-top: 6px;
+		-webkit-line-clamp: 1;
+	}
+}

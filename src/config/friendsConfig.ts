@@ -26,7 +26,7 @@ export const friendsPageConfig: FriendsPageConfig = {
 
 	// 本站信息，用于友链申请指南弹窗中的站点信息展示
 	siteInfo: {
-		name: "fqzlr",
+		name: "OLX",
 		desc: "躬身入局，心为主理，行有尺度，自持本心",
 		url: "https://fqzlr.com",
 		avatar: "https://q1.qlogo.cn/g?b=qq&nk=20447289&s=640",
@@ -57,7 +57,7 @@ export const friendsPageConfig: FriendsPageConfig = {
 // 友链配置
 export const friendsConfig: FriendLink[] = [
 	{
-		title: "番茄主理人",
+		title: "陈半醒",
 		imgurl: "https://q1.qlogo.cn/g?b=qq&nk=20447289&s=640",
 		desc: "坐而言不如起而行.",
 		siteurl: "https://fqzlr.com/",

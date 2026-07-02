@@ -319,9 +319,6 @@ function buildDefaultNavBarConfig(): NavBarConfig {
 	if (siteConfig.pages.sponsor) {
 		myChildren.push(LinkPreset.Fhome);
 	}
-	if (siteConfig.pages.sponsor) {
-		myChildren.push(LinkPreset.Fnote);
-	}
 	if (siteConfig.pages.calendar) {
 		myChildren.push(LinkPreset.Calendar);
 	}

@@ -230,8 +230,7 @@ onDestroy(() => {
 
 	<div class="music-visualizer__controls-buttons">
 		<button
-			class="music-visualizer__btn music-visualizer__btn--playlist"
-			class:music-visualizer__btn--active={isPlaylistOpen}
+			class={`music-visualizer__btn music-visualizer__btn--playlist${isPlaylistOpen ? " music-visualizer__btn--active" : ""}`}
 			onclick={togglePlaylist}
 			title={isPlaylistOpen ? "关闭歌单" : "打开歌单"}
 			aria-label={isPlaylistOpen ? "关闭歌单" : "打开歌单"}
@@ -310,8 +309,7 @@ onDestroy(() => {
 
 <aside
 	id="music-visualizer-playlist-panel"
-	class="music-visualizer__playlist-panel"
-	class:music-visualizer__playlist-panel--open={isPlaylistOpen}
+	class={`music-visualizer__playlist-panel${isPlaylistOpen ? " music-visualizer__playlist-panel--open" : ""}`}
 	aria-label="歌单切换"
 	aria-hidden={!isPlaylistOpen}
 >
@@ -337,8 +335,7 @@ onDestroy(() => {
 				{#each playlist as track, i}
 					<button
 						type="button"
-						class="music-visualizer__playlist-item"
-						class:music-visualizer__playlist-item--active={i === currentIndex}
+						class={`music-visualizer__playlist-item${i === currentIndex ? " music-visualizer__playlist-item--active" : ""}`}
 						onclick={() => playTrack(i)}
 						role="option"
 						aria-selected={i === currentIndex}

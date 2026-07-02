@@ -63,6 +63,7 @@
 @import './pages/categories.css';
 @import './pages/calendar.css';
 @import './pages/article-list.css';
+@import './pages/books.css';
 
 
 @plugin '@tailwindcss/typography';
@@ -835,4 +836,3 @@ html {
   background: #fff !important;
   color: #000 !important;
 }
-

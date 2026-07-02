@@ -5,6 +5,9 @@ declare global {
 	interface ImportMetaEnv {
 		readonly MEILI_MASTER_KEY: string;
 		readonly PUBLIC_GITHUB_APP_ID?: string;
+		readonly PUBLIC_GITHUB_OWNER?: string;
+		readonly PUBLIC_GITHUB_REPO?: string;
+		readonly PUBLIC_GITHUB_BRANCH?: string;
 	}
 
 	interface ITOCManager {

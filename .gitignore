@@ -18,6 +18,7 @@ pnpm-debug.log*
 .env.production
 .wrangler/
 .vectorize-manifest.json
+public/pagefind/
 # macOS-specific files
 .DS_Store
 

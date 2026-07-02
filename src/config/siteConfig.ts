@@ -7,20 +7,20 @@ const SITE_LANG = "zh_CN";
 
 export const siteConfig: SiteConfig = {
 	// 站点标题
-	title: "Fqzlr的博客",
+	title: "OLX的博客",
 
 	// 站点副标题
-	subtitle: "Fqzlr",
+	subtitle: "OLX",
 
 	// 站点 URL
 	site_url: "https://fqzlr.com/",
 
 	// 站点描述
-	description: "fqzlr的个人技术博客，专注NAS分享、AI实践、学习笔记与技术总结，与个人成长分享。",
+	description: "OLX的个人技术博客，专注NAS分享、AI实践、学习笔记与技术总结，与个人成长分享。",
 
 	// 站点关键词
 	keywords: [
-		"fqzlr",
+		"OLX",
 		"JAVA",
 		"AI",
 		"Astro",
@@ -119,7 +119,7 @@ export const siteConfig: SiteConfig = {
 			alt: "logo",
 		},
 		// 导航栏标题
-		title: "Fqzlr的博客",
+		title: "OLX的博客",
 		// 全宽导航栏，导航栏是否占满屏幕宽度
 		widthFull: false,
 		// 导航菜单对齐方式，left：左对齐，center：居中
@@ -314,8 +314,8 @@ export const siteConfig: SiteConfig = {
 	lang: SITE_LANG,
 
 	// 备案号配置，留空则不显示
-	beian: "萌ICP备20268200号",
+	beian: "粤ICP备2026061565号-1",
 
 	// 公安网备号配置，留空则不显示
-	policeBeian: "萌ICP备20268200号",
+	policeBeian: "粤公网安备44200102446063号",
 };
