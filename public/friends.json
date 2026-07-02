@@ -348,5 +348,15 @@
     "tags": [
       "Blog"
     ]
+  },
+  {
+    "id": "https://fqzlr.com/",
+    "title": "陈半醒",
+    "imgurl": "https://q1.qlogo.cn/g?b=qq&nk=20447289&s=640",
+    "desc": "写代码，也写情绪",
+    "siteurl": "https://myblog.olxc.art/myblog/",
+    "tags": [
+      "Blog"
+    ]
   }
 ]
