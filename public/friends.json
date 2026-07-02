@@ -3,8 +3,8 @@
     "id": "https://fqzlr.com/",
     "title": "陈半醒",
     "imgurl": "https://q1.qlogo.cn/g?b=qq&nk=20447289&s=640",
-    "desc": "写代码，也写情绪",
-    "siteurl": "https://olxc.art/myblog",
+    "desc": "坐而言不如起而行.",
+    "siteurl": "https://fqzlr.com/",
     "tags": [
       "Blog"
     ]
@@ -345,6 +345,16 @@
     "imgurl": "https://090909.top/assets/images/logo.ico",
     "desc": "梁栋烨的博客网站。",
     "siteurl": "https://090909.top/",
+    "tags": [
+      "Blog"
+    ]
+  },
+  {
+    "id": "https://fqzlr.com/",
+    "title": "陈半醒",
+    "imgurl": "https://q1.qlogo.cn/g?b=qq&nk=20447289&s=640",
+    "desc": "写代码，也写情绪",
+    "siteurl": "https://olxc.art/myblog",
     "tags": [
       "Blog"
     ]
